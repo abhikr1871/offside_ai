@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 
 const BACKEND_URL = "http://localhost:8080";
 const LIVE_LOADER_VIDEO_SRC = "/animations/live-fetch-loader.mp4";
@@ -282,6 +283,11 @@ export default function LiveScore({ appMode = "club" }: LiveScoreProps) {
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [detailsError, setDetailsError] = useState("");
   const [activeTab, setActiveTab] = useState<"timeline" | "lineups" | "stats">("timeline");
+
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const handleMatchClick = (matchId: string) => {
     if (matchId.startsWith("placeholder-")) return;
@@ -966,7 +972,7 @@ export default function LiveScore({ appMode = "club" }: LiveScoreProps) {
       )}
 
       {/* Detailed Match Overlay Modal */}
-      {selectedMatchId && (
+      {selectedMatchId && mounted && createPortal(
         <div className="match-overlay-backdrop" onClick={handleCloseOverlay}>
           <div className="match-overlay-container" onClick={(e) => e.stopPropagation()}>
             
@@ -1136,7 +1142,8 @@ export default function LiveScore({ appMode = "club" }: LiveScoreProps) {
             ) : null}
 
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

@@ -153,7 +153,7 @@ export default function LeagueStandings() {
                   <th className="w-10 text-center hidden sm:table-cell">D</th>
                   <th className="w-10 text-center hidden sm:table-cell">L</th>
                   <th className="w-12 text-center">GD</th>
-                  <th className="w-12 text-center text-emerald-400">Pts</th>
+                  <th className="w-12 text-center text-emerald-600 dark:text-emerald-400">Pts</th>
                   <th className="w-28 text-center hidden md:table-cell">Form</th>
                 </tr>
               </thead>
@@ -186,19 +186,19 @@ export default function LeagueStandings() {
                           ) : (
                             <FlagIcon team={entry.team.name} className="w-5 h-5" />
                           )}
-                          <span className="team-name text-[12px] font-bold text-zinc-100 truncate max-w-[120px] sm:max-w-[180px]">
+                          <span className="team-name text-[12px] font-bold text-zinc-900 dark:text-zinc-100 truncate max-w-[120px] sm:max-w-[180px]">
                             {entry.team.shortName || entry.team.name}
                           </span>
                         </div>
                       </td>
-                      <td className="text-center font-semibold text-zinc-300 text-xs">{entry.playedGames}</td>
-                      <td className="text-center text-zinc-400 text-xs hidden sm:table-cell">{entry.won}</td>
-                      <td className="text-center text-zinc-400 text-xs hidden sm:table-cell">{entry.draw}</td>
-                      <td className="text-center text-zinc-400 text-xs hidden sm:table-cell">{entry.lost}</td>
+                      <td className="text-center font-semibold text-zinc-700 dark:text-zinc-300 text-xs">{entry.playedGames}</td>
+                      <td className="text-center text-zinc-500 dark:text-zinc-400 text-xs hidden sm:table-cell">{entry.won}</td>
+                      <td className="text-center text-zinc-500 dark:text-zinc-400 text-xs hidden sm:table-cell">{entry.draw}</td>
+                      <td className="text-center text-zinc-500 dark:text-zinc-400 text-xs hidden sm:table-cell">{entry.lost}</td>
                       <td className={`text-center font-mono text-xs ${entry.goalDifference > 0 ? "text-emerald-500/90 font-bold" : entry.goalDifference < 0 ? "text-rose-500/90" : "text-zinc-500"}`}>
                         {entry.goalDifference > 0 ? `+${entry.goalDifference}` : entry.goalDifference}
                       </td>
-                      <td className="text-center font-black text-white text-[13px]">{entry.points}</td>
+                      <td className="text-center font-black text-zinc-900 dark:text-white text-[13px]">{entry.points}</td>
                       <td className="text-center hidden md:table-cell">{renderFormIndicator(entry.form)}</td>
                     </tr>
                   );

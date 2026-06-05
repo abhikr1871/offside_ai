@@ -1,10 +1,10 @@
 @reference "tailwindcss";
 
 .advert-container {
-  @apply w-full rounded-2xl border p-6 transition-all duration-500 relative overflow-hidden flex flex-col justify-between;
-  background: #0b0e14;
-  border-color: rgba(16, 185, 129, 0.15);
-  box-shadow: 0 20px 30px -10px rgba(0, 0, 0, 0.7);
+  @apply w-full rounded-2xl border p-6 transition-all duration-500 relative overflow-hidden flex flex-col justify-between backdrop-blur-lg;
+  background: var(--card-bg);
+  border-color: var(--card-border);
+  box-shadow: 0 20px 25px -5px var(--card-shadow);
   min-height: 520px;
 }
 
@@ -49,11 +49,11 @@
 }
 
 .advert-logo-text {
-  @apply text-base font-black tracking-widest text-white uppercase;
+  @apply text-base font-black tracking-widest text-zinc-950 dark:text-white uppercase;
 }
 
 .advert-title {
-  @apply text-lg sm:text-xl font-extrabold tracking-tight text-zinc-100 max-w-[90%] leading-snug mt-1;
+  @apply text-lg sm:text-xl font-extrabold tracking-tight text-zinc-900 dark:text-zinc-100 max-w-[90%] leading-snug mt-1;
 }
 
 .advert-subtitle {
@@ -89,7 +89,7 @@
 }
 
 .advert-card-title {
-  @apply text-[10.5px] font-black tracking-wider text-white uppercase leading-tight;
+  @apply text-[10.5px] font-black tracking-wider text-zinc-900 dark:text-white uppercase leading-tight;
 }
 
 .advert-card-desc {
@@ -113,10 +113,9 @@
 
 .advert-col-title {
   @apply text-[11px] font-black uppercase tracking-widest text-emerald-500 border-b pb-1.5 w-full;
-  border-color: rgba(255, 255, 255, 0.05);
 }
 
-.advert-col-icon {
+.pulsing-soccer-ball {
   @apply w-12 h-12 text-emerald-500 animate-pulse;
 }
 
@@ -131,7 +130,7 @@
 
 .advert-agent-circle {
   @apply w-14 h-14 rounded-full flex items-center justify-center relative z-20 border shadow-lg cursor-pointer transition-all duration-300;
-  background: #0f1319;
+  background: var(--panel-bg);
   border-color: rgba(16, 185, 129, 0.4);
   box-shadow: 0 0 20px rgba(16, 185, 129, 0.25);
 }

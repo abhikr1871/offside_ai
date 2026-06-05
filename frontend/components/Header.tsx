@@ -9,6 +9,7 @@ export default function Header() {
   const [user, setUser] = useState<StoredUser | null>(null);
   const [appMode, setAppMode] = useState<"club" | "worldcup">("club");
   const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [bgAnim, setBgAnim] = useState<"on" | "off">("on");
 
   useEffect(() => {
     setUser(getCurrentUser());
@@ -37,6 +38,19 @@ export default function Header() {
     } else {
       document.documentElement.classList.remove("dark");
     }
+
+    // Background animation initialization
+    const savedBgAnim = localStorage.getItem("bgAnimation") as "on" | "off" | null;
+    const activeBgAnim = savedBgAnim || "on";
+    setBgAnim(activeBgAnim);
+    if (activeBgAnim === "off") {
+      document.documentElement.classList.add("no-bg-animation");
+    } else {
+      document.documentElement.classList.remove("no-bg-animation");
+    }
+    setTimeout(() => {
+      window.dispatchEvent(new Event("bg-animation-changed"));
+    }, 100);
   }, []);
 
   const toggleTheme = () => {
@@ -48,6 +62,18 @@ export default function Header() {
     } else {
       document.documentElement.classList.remove("dark");
     }
+  };
+
+  const toggleBgAnim = () => {
+    const nextBgAnim = bgAnim === "on" ? "off" : "on";
+    setBgAnim(nextBgAnim);
+    localStorage.setItem("bgAnimation", nextBgAnim);
+    if (nextBgAnim === "off") {
+      document.documentElement.classList.add("no-bg-animation");
+    } else {
+      document.documentElement.classList.remove("no-bg-animation");
+    }
+    window.dispatchEvent(new Event("bg-animation-changed"));
   };
 
   const handleLogout = () => {
@@ -117,6 +143,29 @@ export default function Header() {
               ) : (
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="h-5 w-5">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m0 13.5V21m9-9h-2.25C18 12 12 7.25 12 1.5M12 18.75A6.75 6.75 0 1 0 12 5.25a6.75 6.75 0 0 0 0 13.5ZM3.75 12H1.5m18.75 0h-2.25m-1.932-6.364l-1.591 1.591M6.343 17.657l-1.591 1.591m12.728 0l-1.591-1.591M6.343 6.343L4.752 4.752" />
+                </svg>
+              )}
+            </button>
+            <button
+              onClick={toggleBgAnim}
+              className="theme-toggle-btn relative"
+              aria-label="Toggle background animation"
+              title={bgAnim === "on" ? "Turn background animation OFF" : "Turn background animation ON"}
+              type="button"
+            >
+              {bgAnim === "on" ? (
+                <>
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="h-5 w-5 text-emerald-500">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z" />
+                  </svg>
+                  <span className="absolute top-1 right-1 flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                </>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="h-5 w-5 text-zinc-400">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M12 18.75H4.5a2.25 2.25 0 0 1-2.25-2.25V9m12.843 4.5H13.5m-3.75-3.75H4.5A2.25 2.25 0 0 0 2.25 12v3.75m11.25-11.25H9M3 3l18 18" />
                 </svg>
               )}
             </button>

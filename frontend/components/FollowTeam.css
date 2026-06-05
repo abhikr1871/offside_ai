@@ -1,7 +1,7 @@
 @reference "tailwindcss";
 
 .followteam-container {
-  @apply w-full rounded-2xl border p-6 shadow-xl backdrop-blur-md;
+  @apply w-full rounded-2xl border p-6 shadow-xl backdrop-blur-lg;
   background: var(--card-bg);
   border-color: var(--card-border);
   box-shadow: 0 20px 25px -5px var(--card-shadow);

@@ -1,3 +1,4 @@
+@reference "tailwindcss";
 
 /* Premium Standing Tables Card styling */
 .standings-card-dark {
@@ -5,9 +6,10 @@
   flex-direction: column;
   border-radius: 1rem;
   overflow: hidden;
-  background: #202124;
-  border: 1px solid #3c4043;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  box-shadow: 0 10px 15px -3px var(--card-shadow);
+  backdrop-filter: blur(16px);
   height: 520px;
 }
 
@@ -16,8 +18,8 @@
   flex-direction: column;
   gap: 0.75rem;
   padding: 1rem 1.25rem;
-  border-b: 1px solid rgba(255, 255, 255, 0.08);
-  background: #2b2c30;
+  border-bottom: 1px solid var(--border-light);
+  background: rgba(255, 255, 255, 0.02);
 }
 
 @media (min-width: 640px) {
@@ -33,7 +35,7 @@
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #ffffff;
+  color: var(--text-primary);
 }
 
 /* Scrollable tabs list */
@@ -45,9 +47,9 @@
 }
 
 .standings-tab-btn {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  color: #a1a1aa;
+  background: var(--input-bg);
+  border: 1px solid var(--border-light);
+  color: var(--text-secondary);
   font-size: 10px;
   font-weight: 700;
   padding: 0.25rem 0.625rem;
@@ -58,8 +60,8 @@
 }
 
 .standings-tab-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #ffffff;
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--text-primary);
 }
 
 .standings-tab-btn.active {
@@ -104,14 +106,15 @@
 .standings-table th {
   position: sticky;
   top: 0;
-  background: #202124;
+  background: var(--card-bg);
+  backdrop-filter: blur(12px);
   z-index: 10;
   padding: 0.75rem 0.5rem;
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
-  color: #71717a;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-light);
 }
 
 .standing-row {
@@ -120,6 +123,10 @@
 }
 
 .standing-row:hover {
+  background: rgba(16, 185, 129, 0.06);
+}
+
+.dark .standing-row:hover {
   background: rgba(255, 255, 255, 0.02);
 }
 
@@ -168,12 +175,12 @@
 }
 
 .standing-row:hover .team-name {
-  color: #ffffff;
+  @apply text-zinc-950 dark:text-white;
 }
 
 /* Standings footer */
 .standings-footer {
   padding: 0.625rem 1.25rem;
-  background: #2b2c30;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+  border-top: 1px solid var(--border-light);
 }
