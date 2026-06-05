@@ -1,3 +1,4 @@
+@reference "tailwindcss";
 
 .followteam-container {
   @apply w-full rounded-2xl border p-6 shadow-xl backdrop-blur-md;
@@ -40,7 +41,21 @@
 }
 
 .team-list {
-  @apply space-y-3;
+  @apply space-y-3 overflow-y-auto pr-1;
+  max-height: 680px;
+}
+
+.team-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.team-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.team-list::-webkit-scrollbar-thumb {
+  background: var(--card-border);
+  border-radius: 2px;
 }
 
 .team-card {

@@ -5,6 +5,8 @@ import Header from "../components/Header";
 import LiveScore from "../components/LiveScore";
 import FollowTeam from "../components/FollowTeam";
 import ScheduleRAG from "../components/ScheduleRAG";
+import LeagueStandings from "../components/LeagueStandings";
+import JourneyHub from "../components/JourneyHub";
 
 const BACKEND_URL = "http://localhost:8080";
 
@@ -55,10 +57,15 @@ export default function Home() {
             <FollowTeam onFollowChange={setFollowedTeams} appMode={appMode} />
           </section>
 
-          <section className="md:col-span-2 space-y-6">
-            <ScheduleRAG followedTeams={followedTeams} appMode={appMode} />
+          <section className="md:col-span-2 flex flex-col gap-6">
+            <LeagueStandings />
+            <JourneyHub />
           </section>
         </div>
+
+        <section className="pt-4">
+          <ScheduleRAG followedTeams={followedTeams} appMode={appMode} />
+        </section>
       </main>
 
       <footer className="border-t py-6 text-center text-xs mt-12 transition-colors duration-300" style={{ borderColor: "var(--header-border)", background: "var(--card-bg)", color: "var(--text-secondary)" }}>

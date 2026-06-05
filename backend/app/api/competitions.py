@@ -6,6 +6,7 @@ from app.schemas.competitions_schema import (
     CompetitionTeamsResponse,
     TeamDetailedResponse
 )
+from app.schemas.standings_schema import CompetitionStandingsResponse
 from app.services.competitions_service import competitions_service
 
 router = APIRouter(
@@ -51,6 +52,22 @@ async def get_competition_teams(code: str):
         raise HTTPException(
             status_code=500,
             detail=f"Failed to fetch competition teams for '{code}': {exc}"
+        )
+
+@router.get("/{code}/standings", response_model=CompetitionStandingsResponse)
+async def get_competition_standings(code: str):
+    """
+    Fetch standings for a specific competition from football-data.org.
+    Caches response in MongoDB for 1 day.
+    """
+    try:
+        return await competitions_service.fetch_competition_standings(code=code)
+    except Exception as exc:
+        if isinstance(exc, HTTPException):
+            raise exc
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch standings for '{code}': {exc}"
         )
 
 @teams_router.get("/{team_id}", response_model=TeamDetailedResponse)

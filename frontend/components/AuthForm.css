@@ -1,3 +1,4 @@
+@reference "tailwindcss";
 
 .auth-page {
   @apply min-h-screen px-4 py-10;

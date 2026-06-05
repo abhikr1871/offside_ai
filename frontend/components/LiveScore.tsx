@@ -118,7 +118,7 @@ export function FlagIcon({ team, className = "h-7 w-7" }: { team: string; classN
         <svg className="w-full h-full" viewBox="0 0 5 3" xmlns="http://www.w3.org/2000/svg">
           <path fill="#dc052d" d="M0 0h5v3H0z"/>
           <circle cx="2.5" cy="1.5" r="1" fill="#0066b2"/>
-          <path fill="#fff" d="M2.5.5A1 1 0 0 1 3.5 1.5a1 1 0 0 1-1 1" stroke="#fff" strokeWidth="0.2" fill="none"/>
+          <path d="M2.5.5A1 1 0 0 1 3.5 1.5a1 1 0 0 1-1 1" stroke="#fff" strokeWidth="0.2" fill="none"/>
         </svg>
       );
     }
@@ -222,6 +222,7 @@ interface MatchState {
   isLive: boolean;
   status: string;
   events: string[];
+  isPlaceholder?: boolean;
   goals?: {
     minute?: number;
     scorer: string;
@@ -280,7 +281,7 @@ export default function LiveScore({ appMode = "club" }: LiveScoreProps) {
   const [matchDetails, setMatchDetails] = useState<any | null>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [detailsError, setDetailsError] = useState("");
-  const [activeTab, setActiveTab] = useState<"timeline" | "lineups" | "stats">("stats");
+  const [activeTab, setActiveTab] = useState<"timeline" | "lineups" | "stats">("timeline");
 
   const handleMatchClick = (matchId: string) => {
     if (matchId.startsWith("placeholder-")) return;
@@ -288,26 +289,12 @@ export default function LiveScore({ appMode = "club" }: LiveScoreProps) {
     setLoadingDetails(true);
     setDetailsError("");
     setMatchDetails(null);
-    setActiveTab("stats");
+    setActiveTab("timeline");
   };
 
   const handleCloseOverlay = () => {
     setSelectedMatchId(null);
     setMatchDetails(null);
-  };
-
-  const formatTeamScorers = (goalsList: any[]) => {
-    const grouped: Record<string, string[]> = {};
-    goalsList.forEach(g => {
-      const scorerName = g.scorer?.name || "Player";
-      const typeSuffix = g.type === "PENALTY" ? " (P)" : (g.type === "OWN" ? " (OG)" : "");
-      const minText = `${g.minute}'${typeSuffix}`;
-      if (!grouped[scorerName]) {
-        grouped[scorerName] = [];
-      }
-      grouped[scorerName].push(minText);
-    });
-    return Object.entries(grouped).map(([name, mins]) => `${name} ${mins.join(", ")}`);
   };
 
   const isBetter = (key: string, homeVal: number, awayVal: number, isHome: boolean) => {
@@ -536,10 +523,13 @@ export default function LiveScore({ appMode = "club" }: LiveScoreProps) {
         type: "goal",
         minute: g.minute,
         teamId: g.team?.id || (g.team?.name === matchDetails.homeTeam?.name ? homeTeamId : awayTeamId),
+        teamName: g.team?.name || "Team",
         title: "Goal scored",
         playerName: g.scorer?.name || "Player",
         assistName: g.assist?.name,
         goalType: g.type,
+        scoreHome: g.score?.home,
+        scoreAway: g.score?.away,
       });
     });
 
@@ -598,16 +588,91 @@ export default function LiveScore({ appMode = "club" }: LiveScoreProps) {
             return (
               <div key={idx} className={`timeline-row ${isHomeEvent ? 'home-event-row' : 'away-event-row'}`}>
                 <div className="timeline-time-badge">{ev.minute}'</div>
-                <div className="timeline-event-card">
-                  <div className="event-card-header">
-                    <span className="event-icon-span">{iconText}</span>
-                    <span className="event-title-span">{ev.title || ev.type.toUpperCase()}</span>
+                {ev.type === "goal" ? (
+                  <div className={`timeline-goal-card ${isHomeEvent ? "timeline-goal-home" : "timeline-goal-away"}`}>
+                    <div className="timeline-goal-header">
+                      <span className="goal-card-badge">{ev.goalType === "PENALTY" ? "GOAL (P)" : ev.goalType === "OWN" ? "GOAL (OG)" : "GOOOAAALLL!!!"}</span>
+                      <span className="goal-card-minute">{ev.minute}'</span>
+                    </div>
+                    <div className="timeline-goal-scoreline">
+                      <span>{matchDetails.homeTeam?.shortName || matchDetails.homeTeam?.name}</span>
+                      <strong>{ev.scoreHome ?? 0} - {ev.scoreAway ?? 0}</strong>
+                      <span>{matchDetails.awayTeam?.shortName || matchDetails.awayTeam?.name}</span>
+                    </div>
+                    <div className="timeline-goal-body">
+                      <div className="timeline-goal-player">{ev.playerName}</div>
+                      <div className="timeline-goal-meta">
+                        {ev.teamName}
+                        {ev.assistName ? ` · Assist: ${ev.assistName}` : ""}
+                      </div>
+                      <p className="event-detail-p">
+                        {ev.goalType === "PENALTY"
+                          ? `Penalty converted by ${ev.playerName}.`
+                          : ev.goalType === "OWN"
+                            ? `Own goal credited to ${ev.playerName}.`
+                            : `Goal scored by ${ev.playerName}${ev.assistName ? ` with help from ${ev.assistName}` : ""}.`}
+                      </p>
+                    </div>
                   </div>
-                  <p className="event-detail-p">{eventDetail}</p>
-                </div>
+                ) : (
+                  <div className="timeline-event-card">
+                    <div className="event-card-header">
+                      <span className="event-icon-span">{iconText}</span>
+                      <span className="event-title-span">{ev.title || ev.type.toUpperCase()}</span>
+                    </div>
+                    <p className="event-detail-p">{eventDetail}</p>
+                  </div>
+                )}
               </div>
             );
           })}
+        </div>
+      </div>
+    );
+  };
+
+  const renderGoalsPanel = () => {
+    if (!matchDetails?.goals?.length) {
+      return (
+        <div className="goals-panel-empty">
+          No goals recorded for this match.
+        </div>
+      );
+    }
+
+    const homeGoals = matchDetails.goals.filter((g: any) => g.team?.id === matchDetails.homeTeam?.id || g.team?.name === matchDetails.homeTeam?.name);
+    const awayGoals = matchDetails.goals.filter((g: any) => g.team?.id === matchDetails.awayTeam?.id || g.team?.name === matchDetails.awayTeam?.name);
+
+    return (
+      <div className="goals-panel">
+        <div className="goals-panel-header">GOALS</div>
+        <div className="goals-columns">
+          <div className="goals-column">
+            <div className="goals-team-label">
+              {matchDetails.homeTeam?.shortName || matchDetails.homeTeam?.name}
+            </div>
+            {homeGoals.length > 0 ? homeGoals.map((g: any, idx: number) => (
+              <div key={idx} className="goal-item">
+                <span className="goal-minute">{g.minute}'</span>
+                <span className="goal-text">
+                  {g.scorer?.name || "Goal"}{g.type === "PENALTY" ? " (P)" : g.type === "OWN" ? " (OG)" : ""}
+                </span>
+              </div>
+            )) : <div className="goal-none">No scorers</div>}
+          </div>
+          <div className="goals-column goals-column-right">
+            <div className="goals-team-label">
+              {matchDetails.awayTeam?.shortName || matchDetails.awayTeam?.name}
+            </div>
+            {awayGoals.length > 0 ? awayGoals.map((g: any, idx: number) => (
+              <div key={idx} className="goal-item goal-item-right">
+                <span className="goal-text">
+                  {g.scorer?.name || "Goal"}{g.type === "PENALTY" ? " (P)" : g.type === "OWN" ? " (OG)" : ""}
+                </span>
+                <span className="goal-minute">{g.minute}'</span>
+              </div>
+            )) : <div className="goal-none">No scorers</div>}
+          </div>
         </div>
       </div>
     );
@@ -938,7 +1003,7 @@ export default function LiveScore({ appMode = "club" }: LiveScoreProps) {
                 {/* Main Score Box */}
                 <div className="match-summary-card">
                   <div className="summary-card-top">
-                    <span className="summary-league-text text-purple-400">
+                    <span className="summary-league-text">
                       {matchDetails.competition?.name || "League"} · {matchDetails.utcDate ? formatMatchDate(matchDetails.utcDate) : "TBD"}
                     </span>
                     <span className="summary-status-text">
@@ -949,7 +1014,7 @@ export default function LiveScore({ appMode = "club" }: LiveScoreProps) {
                   <div className="summary-score-row">
                     <div className="summary-team home-side">
                       {matchDetails.homeTeam?.crest ? (
-                        <img src={matchDetails.homeTeam.crest} alt={matchDetails.homeTeam.name} className="summary-crest" />
+                        <img src={matchDetails.homeTeam.crest} alt={matchDetails.homeTeam.name || ""} className="summary-crest" />
                       ) : (
                         <FlagIcon team={matchDetails.homeTeam?.name || ""} className="w-12 h-12" />
                       )}
@@ -964,46 +1029,33 @@ export default function LiveScore({ appMode = "club" }: LiveScoreProps) {
 
                     <div className="summary-team away-side">
                       {matchDetails.awayTeam?.crest ? (
-                        <img src={matchDetails.awayTeam.crest} alt={matchDetails.awayTeam.name} className="summary-crest" />
+                        <img src={matchDetails.awayTeam.crest} alt={matchDetails.awayTeam.name || ""} className="summary-crest" />
                       ) : (
                         <FlagIcon team={matchDetails.awayTeam?.name || ""} className="w-12 h-12" />
                       )}
                       <span className="summary-team-name">{matchDetails.awayTeam?.shortName || matchDetails.awayTeam?.name}</span>
                     </div>
                   </div>
-
-                  <div className="summary-center-icon text-zinc-700/20 font-black">
-                    ⚽
-                  </div>
-
-                  <div className="summary-scorers-grid">
-                    <div className="summary-scorers home-scorers">
-                      {formatTeamScorers(matchDetails.goals?.filter((g: any) => g.team?.id === matchDetails.homeTeam?.id || g.team?.name === matchDetails.homeTeam?.name) || []).map((s, idx) => (
-                        <div key={idx} className="scorer-item">{s}</div>
-                      ))}
-                    </div>
-                    <div className="summary-scorers away-scorers">
-                      {formatTeamScorers(matchDetails.goals?.filter((g: any) => g.team?.id === matchDetails.awayTeam?.id || g.team?.name === matchDetails.awayTeam?.name) || []).map((s, idx) => (
-                        <div key={idx} className="scorer-item">{s}</div>
-                      ))}
-                    </div>
-                  </div>
                 </div>
 
-                {/* Recap Cards */}
+                {/* Action Cards - Replaced video content */}
                 <div className="match-recap-cards-container">
-                  <div className="recap-card video-recap-card">
+                  <a 
+                    href="https://www.youtube.com/results?search_query=football+highlights" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="recap-card video-recap-card hover:opacity-80 transition-opacity"
+                  >
                     <div className="video-card-overlay">
-                      <div className="video-card-badge">Match recap</div>
+                      <div className="video-card-badge">Match highlights</div>
                       <div className="video-play-button-shell">
                         <div className="play-button-circle">
                           <svg className="w-6 h-6 fill-current text-white ml-0.5" viewBox="0 0 24 24">
                             <path d="M8 5v14l11-7z"/>
                           </svg>
                         </div>
-                        <span className="play-button-label">HIGHLIGHTS</span>
+                        <span className="play-button-label">WATCH ON YOUTUBE</span>
                       </div>
-                      <div className="video-card-duration">10:32</div>
                     </div>
                     <div className="video-card-bg-gradient" />
                     <div className="video-card-teams-text uppercase opacity-10">
@@ -1015,9 +1067,14 @@ export default function LiveScore({ appMode = "club" }: LiveScoreProps) {
                         {matchDetails.awayTeam?.tla || matchDetails.awayTeam?.shortName?.slice(0,3).toUpperCase() || "AWAY"}
                       </span>
                     </div>
-                  </div>
+                  </a>
 
-                  <div className="recap-card story-recap-card">
+                  <a 
+                    href="https://www.espn.com" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="recap-card story-recap-card hover:opacity-80 transition-opacity"
+                  >
                     <div className="story-card-header">
                       <span className="story-league-badge">{matchDetails.competition?.code || "MATCH"}</span>
                       <div className="story-arrow-circle">
@@ -1027,13 +1084,13 @@ export default function LiveScore({ appMode = "club" }: LiveScoreProps) {
                       </div>
                     </div>
                     <div className="story-card-body">
-                      <h3 className="story-title">WATCH MATCH STORY</h3>
-                      <p className="story-subtitle">Match recap</p>
+                      <h3 className="story-title">FULL MATCH ANALYSIS</h3>
+                      <p className="story-subtitle">Read detailed recap on ESPN</p>
                     </div>
                     <div className="story-card-footer">
                       <div className="story-footer-logo">⚽ OFFSIDE AI</div>
                     </div>
-                  </div>
+                  </a>
                 </div>
 
                 {/* Tabs */}
