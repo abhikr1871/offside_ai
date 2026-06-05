@@ -1,0 +1,552 @@
+
+/* Premium dark themed Matches container */
+.livescore-container-dark {
+  @apply w-full rounded-2xl overflow-hidden shadow-2xl;
+  background: #202124;
+  border: 1px solid #3c4043;
+}
+
+.livescore-header-dark {
+  @apply flex items-center justify-between px-5 py-4 border-b;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.livescore-title-dark {
+  @apply text-base font-extrabold tracking-tight text-white;
+}
+
+.league-picker-dark {
+  @apply flex items-center rounded-lg px-2.5 py-1 bg-zinc-800 border border-zinc-700/50 cursor-pointer;
+}
+
+.league-select-dark {
+  @apply bg-transparent text-[11px] font-bold text-zinc-300 outline-none cursor-pointer pr-1;
+}
+
+.league-select-dark option {
+  @apply bg-zinc-900 text-zinc-300;
+}
+
+.livescore-next-btn-dark {
+  @apply flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-700/50 bg-zinc-800 text-zinc-300 transition-all hover:scale-105 hover:bg-zinc-700 hover:text-white cursor-pointer;
+}
+
+/* Loading, Error and Empty states */
+.livescore-loading-dark {
+  @apply flex flex-col md:flex-row items-center justify-center gap-6 py-12 px-6 text-center md:text-left;
+}
+
+.loader-video-shell-dark {
+  @apply relative flex aspect-video w-[300px] shrink-0 items-center justify-center overflow-hidden rounded-xl border bg-zinc-900 shadow-md;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.loader-video-dark {
+  @apply h-full w-full object-cover;
+}
+
+.loader-ring-dark {
+  @apply h-8 w-8 rounded-full border-2 border-zinc-700 border-t-emerald-500 animate-spin;
+}
+
+.loader-text-container-dark {
+  @apply flex flex-col gap-1 md:text-left;
+}
+
+.loader-title-dark {
+  @apply text-sm font-extrabold text-white;
+}
+
+.loader-copy-dark {
+  @apply text-[11px] text-zinc-400 font-semibold;
+}
+
+.livescore-empty-compact-dark {
+  @apply py-16 text-center text-xs font-semibold text-zinc-500 italic;
+}
+
+.livescore-empty-copy-dark {
+  @apply italic;
+}
+
+/* 2-column Grid Board Matches */
+.livescore-grid-dark {
+  @apply grid grid-cols-1 md:grid-cols-2 gap-0 w-full;
+}
+
+/* Match Row style */
+.match-row-dark {
+  @apply flex items-center justify-between p-4 md:p-5 border-b;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+/* Set vertical divider border between columns on desktop views */
+@media (min-width: 768px) {
+  .match-row-dark:nth-child(odd) {
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+  }
+}
+
+.match-teams-left-dark {
+  @apply flex-1 flex flex-col gap-2 min-w-0;
+}
+
+.team-row-dark {
+  @apply flex items-center justify-between gap-3 w-full;
+}
+
+.team-details-dark {
+  @apply flex items-center gap-3 min-w-0;
+}
+
+.team-crest-img-dark {
+  @apply h-6 w-6 object-contain flex-shrink-0 bg-white rounded-md p-0.5 shadow-sm;
+}
+
+.team-name-dark {
+  @apply font-bold text-zinc-200 truncate text-[13px] tracking-wide;
+}
+
+.red-card-badge-dark {
+  @apply inline-block w-2 h-3 bg-red-600 rounded-[1px] ml-1.5 flex-shrink-0 shadow-md animate-pulse;
+}
+
+.team-score-container-dark {
+  @apply flex items-center gap-1.5 flex-shrink-0;
+}
+
+.team-score-dark {
+  @apply font-mono text-[14px] font-black text-white w-5 text-right;
+}
+
+.winner-arrow-dark {
+  @apply text-zinc-300 text-[10px] select-none ml-1 font-bold;
+}
+
+.match-divider-dark {
+  @apply w-px shrink-0 self-stretch mx-4 md:mx-5;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.match-meta-right-dark {
+  @apply flex flex-col items-center justify-center gap-0.5 min-w-[72px] text-center flex-shrink-0;
+}
+
+.match-status-text-dark {
+  @apply text-[11px] font-bold text-zinc-300 uppercase tracking-wider;
+}
+
+.match-date-text-dark {
+  @apply text-[10px] text-zinc-500 font-bold tracking-wide;
+}
+
+/* Modal backdrop and container */
+.match-overlay-backdrop {
+  @apply fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 md:p-6;
+}
+
+.match-overlay-container {
+  @apply bg-[#202124] border border-[#3c4043] rounded-2xl w-full max-w-4xl text-white shadow-2xl flex flex-col max-h-[92vh] overflow-hidden;
+}
+
+/* Header */
+.match-overlay-header {
+  @apply flex items-center justify-between px-5 py-4 border-b border-zinc-700/50 bg-[#2b2c30];
+}
+
+.match-overlay-back-btn {
+  @apply flex items-center gap-3 text-sm font-bold text-zinc-200 hover:text-white transition-all cursor-pointer bg-transparent border-none outline-none;
+}
+
+.match-overlay-title-text {
+  @apply truncate max-w-[200px] sm:max-w-md;
+}
+
+.match-overlay-close-btn {
+  @apply flex h-8 w-8 items-center justify-center rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white transition-all cursor-pointer bg-transparent border-none outline-none;
+}
+
+/* Loading & Error */
+.match-overlay-loading, .match-overlay-error {
+  @apply flex-1 flex flex-col items-center justify-center p-12 text-center;
+}
+
+/* Scrollable content container */
+.match-overlay-content {
+  @apply flex-1 overflow-y-auto p-4 md:p-6 flex flex-col gap-6 bg-[#202124];
+}
+
+/* Custom Scrollbar */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+/* Main Score Panel Card */
+.match-summary-card {
+  @apply relative rounded-xl p-5 md:p-6 flex flex-col gap-5 border border-zinc-700/40 shadow-lg bg-[#2b2c30]/50 overflow-hidden;
+}
+
+.summary-card-top {
+  @apply flex items-center justify-between text-xs font-extrabold text-zinc-400 uppercase tracking-wider;
+}
+
+.summary-league-text {
+  @apply text-purple-400;
+}
+
+.summary-status-text {
+  @apply bg-zinc-800 text-zinc-300 rounded px-2 py-0.5 font-bold;
+}
+
+.summary-score-row {
+  @apply flex items-center justify-between gap-4 md:gap-8 py-2 relative z-10;
+}
+
+.summary-team {
+  @apply flex-1 flex flex-col items-center justify-center gap-2 text-center min-w-0;
+}
+
+.summary-crest {
+  @apply w-12 h-12 md:w-16 md:h-16 object-contain bg-white rounded-lg p-1 shadow-md;
+}
+
+.summary-team-name {
+  @apply font-extrabold text-sm md:text-base text-zinc-100 truncate max-w-full;
+}
+
+.summary-score-display {
+  @apply flex items-center gap-3 md:gap-5 flex-shrink-0;
+}
+
+.score-number {
+  @apply font-mono text-3xl md:text-4xl font-black text-white;
+}
+
+.score-divider {
+  @apply text-zinc-500 font-bold text-xl;
+}
+
+.summary-center-icon {
+  @apply absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-2xl text-zinc-600/10 select-none pointer-events-none;
+}
+
+/* Scorers section */
+.summary-scorers-grid {
+  @apply grid grid-cols-2 gap-4 border-t border-zinc-700/30 pt-3.5 text-[11px] text-zinc-400 font-semibold leading-relaxed;
+}
+
+.home-scorers {
+  @apply text-left pr-2;
+}
+
+.away-scorers {
+  @apply text-right pl-2;
+}
+
+.scorer-item {
+  @apply truncate;
+}
+
+/* Dual Video/Story Cards matching mockup */
+.match-recap-cards-container {
+  @apply grid grid-cols-1 md:grid-cols-2 gap-4;
+}
+
+.recap-card {
+  @apply relative rounded-xl overflow-hidden border border-zinc-700/30 min-h-[160px] flex flex-col justify-between transition-all hover:scale-[1.01] hover:shadow-lg cursor-pointer;
+}
+
+/* Video Card overlay & graphic elements */
+.video-recap-card {
+  background: linear-gradient(135deg, #4c1d95 0%, #1e1b4b 100%);
+}
+
+.video-card-overlay {
+  @apply absolute inset-0 p-4 flex flex-col justify-between z-10;
+}
+
+.video-card-badge {
+  @apply self-start bg-black/40 text-white text-[10px] font-bold uppercase tracking-wider rounded px-2 py-0.5;
+}
+
+.video-play-button-shell {
+  @apply flex flex-col items-center justify-center gap-2 self-center cursor-pointer;
+}
+
+.play-button-circle {
+  @apply w-12 h-12 rounded-full bg-white/20 backdrop-blur-md border border-white/40 flex items-center justify-center transition-all hover:scale-110 hover:bg-white/30 shadow-md;
+}
+
+.play-button-label {
+  @apply text-[10px] font-extrabold tracking-widest text-white/80;
+}
+
+.video-card-duration {
+  @apply self-end bg-black/60 text-white text-[10px] font-mono rounded px-1.5 py-0.5;
+}
+
+.video-card-teams-text {
+  @apply absolute left-4 bottom-4 font-black tracking-wide select-none opacity-20 pointer-events-none;
+}
+
+/* Watch Story Card (Gradient & Arrow) */
+.story-recap-card {
+  background: linear-gradient(135deg, #991b1b 0%, #1e3a8a 100%);
+  @apply p-4;
+}
+
+.story-card-header {
+  @apply flex items-center justify-between;
+}
+
+.story-league-badge {
+  @apply text-[10px] font-extrabold text-white bg-white/10 rounded px-2 py-0.5 border border-white/10;
+}
+
+.story-arrow-circle {
+  @apply w-8 h-8 rounded-full bg-white/15 border border-white/25 flex items-center justify-center transition-all hover:bg-white/25 cursor-pointer;
+}
+
+.story-card-body {
+  @apply mt-auto py-2;
+}
+
+.story-title {
+  @apply text-base font-extrabold text-white tracking-wide;
+}
+
+.story-subtitle {
+  @apply text-[11px] text-zinc-300 font-bold mt-0.5;
+}
+
+.story-card-footer {
+  @apply border-t border-white/10 pt-2 mt-2 flex items-center justify-between text-[9px] font-black text-white/50 tracking-wider;
+}
+
+/* Navigation Tabs inside Modal */
+.overlay-tabs-bar {
+  @apply flex border-b border-zinc-700/50 bg-[#2b2c30]/30 rounded-lg p-1;
+}
+
+.overlay-tab-btn {
+  @apply flex-1 py-2 text-center text-xs font-extrabold text-zinc-400 hover:text-white rounded-md transition-all cursor-pointer bg-transparent border-none outline-none;
+}
+
+.overlay-tab-btn.active {
+  @apply bg-zinc-800 text-white border-b-2 border-emerald-500 rounded-md shadow-sm;
+}
+
+/* Active tab panel container */
+.overlay-tab-content-panel {
+  @apply min-h-[200px];
+}
+
+/* Stats Tab Panel */
+.stats-tab-panel {
+  @apply flex flex-col gap-4;
+}
+
+.stats-tab-header {
+  @apply flex justify-center py-1 border-b border-zinc-800;
+}
+
+.stats-header-team {
+  @apply flex items-center gap-3 justify-center w-full;
+}
+
+.stats-rows-list {
+  @apply flex flex-col gap-2.5;
+}
+
+.stats-compare-row {
+  @apply flex items-center justify-between py-1.5 border-b border-zinc-800 text-xs font-bold text-zinc-300;
+}
+
+.stats-val-container {
+  @apply flex-1 flex items-center min-w-[60px];
+}
+
+.home-val-col {
+  @apply justify-start pl-2;
+}
+
+.away-val-col {
+  @apply justify-end pr-2;
+}
+
+.stats-val-plain {
+  @apply text-zinc-300 text-sm font-bold;
+}
+
+.stats-val-pill {
+  @apply text-white text-xs font-black px-3 py-1 rounded-full min-w-[38px] text-center flex items-center justify-center shadow-md;
+}
+
+.home-highlight-pill {
+  background: #7E22CE; /* Purple for home */
+}
+
+.away-highlight-pill {
+  background: #D97706; /* Gold/Amber for away */
+}
+
+.stats-label-col {
+  @apply text-zinc-400 font-bold text-center uppercase tracking-wider text-[10px] w-28 flex-shrink-0;
+}
+
+/* Lineups Tab Panel */
+.lineups-tab-panel {
+  @apply flex flex-col gap-4;
+}
+
+.lineups-formations-row {
+  @apply grid grid-cols-2 gap-4 border-b border-zinc-800 pb-3;
+}
+
+.lineup-formation-box {
+  @apply flex flex-col gap-1 text-center;
+}
+
+.formation-label {
+  @apply text-[9px] font-extrabold text-zinc-500 tracking-wider;
+}
+
+.formation-value {
+  @apply text-base font-black text-white;
+}
+
+.coach-value {
+  @apply text-[10px] text-zinc-400 font-semibold;
+}
+
+.lineups-columns-grid {
+  @apply grid grid-cols-2 gap-4 md:gap-8;
+}
+
+.lineup-team-column {
+  @apply flex flex-col gap-3 min-w-0;
+}
+
+.home-column {
+  @apply border-r border-zinc-800/60 pr-2 md:pr-4;
+}
+
+.away-column {
+  @apply pl-2 md:pl-4;
+}
+
+.roster-section-title {
+  @apply text-[10px] font-extrabold text-zinc-500 tracking-wider border-b border-zinc-800 pb-1 uppercase;
+}
+
+.players-list {
+  @apply flex flex-col gap-2;
+}
+
+.player-row {
+  @apply flex items-center gap-3 text-xs font-semibold text-zinc-200 py-1;
+}
+
+.player-shirt-number {
+  @apply flex-shrink-0 w-6 h-6 rounded bg-zinc-800 border border-zinc-700/50 flex items-center justify-center font-mono font-bold text-[10px] text-zinc-300;
+}
+
+.player-meta {
+  @apply flex flex-col min-w-0;
+}
+
+.player-name {
+  @apply truncate font-bold text-zinc-200;
+}
+
+.player-position {
+  @apply text-[9px] text-zinc-500 font-semibold uppercase tracking-wider;
+}
+
+.no-players-text {
+  @apply text-zinc-500 text-xs italic py-2;
+}
+
+/* Timeline Tab Panel */
+.timeline-tab-panel {
+  @apply py-4;
+}
+
+.timeline-wrapper {
+  @apply relative flex flex-col gap-6 pl-6 md:pl-0;
+}
+
+.timeline-line {
+  @apply absolute left-[15px] md:left-1/2 top-2 bottom-2 w-0.5 bg-zinc-800/80 -translate-x-1/2;
+}
+
+.timeline-row {
+  @apply relative flex flex-col md:flex-row items-start md:items-center justify-between w-full min-h-[48px];
+}
+
+.timeline-time-badge {
+  @apply absolute left-[15px] md:left-1/2 top-1.5 md:top-1/2 -translate-x-1/2 md:-translate-y-1/2 z-10 w-8 h-8 rounded-full bg-zinc-800 border-2 border-zinc-700 flex items-center justify-center font-mono text-[10px] font-black text-white shadow-md;
+}
+
+.timeline-event-card {
+  @apply bg-[#2b2c30]/40 border border-zinc-800/60 rounded-lg p-3 w-[85%] md:w-[45%] ml-8 md:ml-0 flex flex-col gap-1 transition-all hover:bg-zinc-800/40;
+}
+
+.event-card-header {
+  @apply flex items-center gap-2;
+}
+
+.event-icon-span {
+  @apply text-xs flex-shrink-0;
+}
+
+.event-title-span {
+  @apply text-[10px] font-extrabold uppercase tracking-wider text-zinc-400;
+}
+
+.event-detail-p {
+  @apply text-xs font-bold text-zinc-200;
+}
+
+@media (min-width: 768px) {
+  .home-event-row {
+    @apply flex-row-reverse;
+  }
+  .home-event-row .timeline-event-card {
+    @apply text-right items-end mr-[5%] ml-0;
+  }
+  .home-event-row .event-card-header {
+    @apply flex-row-reverse;
+  }
+  .away-event-row .timeline-event-card {
+    @apply ml-[5%] mr-0;
+  }
+}
+
+/* Overlay Footer */
+.overlay-footer {
+  @apply mt-4 pt-4 border-t border-zinc-800/60 flex flex-col gap-1 text-[11px] font-semibold text-zinc-500;
+}
+
+.footer-venue {
+  @apply flex items-center gap-1;
+}
+
+.venue-highlight {
+  @apply text-emerald-400 font-bold;
+}
+
+.footer-timezone {
+  @apply text-[10px] italic;
+}
+
