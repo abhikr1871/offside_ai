@@ -12,6 +12,7 @@ from app.api.live_matches import router as live_matches_router
 from app.api.logistics import router as logistics_router
 from app.api.schedule import router as schedule_router
 from app.api.competitions import router as competitions_router, teams_router
+from app.api.auth import router as auth_router
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -47,6 +48,7 @@ app.include_router(logistics_router)
 app.include_router(schedule_router)
 app.include_router(competitions_router)
 app.include_router(teams_router)
+app.include_router(auth_router)
 
 # Root Endpoint
 @app.get("/")
@@ -86,5 +88,6 @@ def get_config():
             {"value": "WC", "label": "FIFA World Cup"}
         ]
     }
-# Reload trigger comment
+# Reload trigger comment - force reload 1
+
 

@@ -2,11 +2,12 @@ export interface StoredUser {
   id: string;
   name: string;
   email: string;
-  password: string;
+  password?: string;
 }
 
 const USERS_KEY = "offside_users";
 const CURRENT_USER_KEY = "offside_current_user_email";
+const BACKEND_URL = "http://localhost:8080";
 
 export function getStoredUsers(): StoredUser[] {
   if (typeof window === "undefined") return [];
@@ -24,38 +25,60 @@ export function getCurrentUser(): StoredUser | null {
   return getStoredUsers().find(user => user.email === email) || null;
 }
 
-export function signUpUser(name: string, email: string, password: string): StoredUser {
+export async function signUpUser(name: string, email: string, password: string): Promise<StoredUser> {
   const normalizedEmail = email.trim().toLowerCase();
-  const users = getStoredUsers();
 
-  if (users.some(user => user.email === normalizedEmail)) {
-    throw new Error("An account with this email already exists.");
+  const response = await fetch(`${BACKEND_URL}/api/v1/auth/signup`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      name: name.trim(),
+      email: normalizedEmail,
+      password: password,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || "Failed to sign up.");
   }
 
-  const user: StoredUser = {
-    id: crypto.randomUUID(),
-    name: name.trim(),
-    email: normalizedEmail,
-    password,
-  };
+  const user: StoredUser = await response.json();
 
+  const users = getStoredUsers().filter(u => u.email !== user.email);
   localStorage.setItem(USERS_KEY, JSON.stringify([...users, user]));
   localStorage.setItem(CURRENT_USER_KEY, user.email);
+
   return user;
 }
 
-export function loginUser(email: string, password: string): StoredUser {
+export async function loginUser(email: string, password: string): Promise<StoredUser> {
   const normalizedEmail = email.trim().toLowerCase();
-  const user = getStoredUsers().find(item => (
-    item.email === normalizedEmail &&
-    item.password === password
-  ));
 
-  if (!user) {
-    throw new Error("Invalid email or password.");
+  const response = await fetch(`${BACKEND_URL}/api/v1/auth/login`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      email: normalizedEmail,
+      password: password,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || "Invalid email or password.");
   }
 
+  const user: StoredUser = await response.json();
+
+  const users = getStoredUsers().filter(u => u.email !== user.email);
+  localStorage.setItem(USERS_KEY, JSON.stringify([...users, user]));
   localStorage.setItem(CURRENT_USER_KEY, user.email);
+
   return user;
 }
 

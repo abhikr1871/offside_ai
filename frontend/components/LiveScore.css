@@ -147,7 +147,7 @@
 }
 
 .match-overlay-container {
-  @apply border rounded-2xl w-full max-w-5xl h-[85vh] shadow-2xl flex flex-col overflow-hidden backdrop-blur-xl;
+  @apply border rounded-2xl w-full max-w-[620px] h-[95vh] shadow-2xl flex flex-col overflow-hidden backdrop-blur-xl;
   background: var(--card-bg);
   border-color: var(--card-border);
   color: var(--text-primary);
@@ -181,7 +181,6 @@
 .match-overlay-content {
   @apply flex-1 overflow-y-auto p-4 md:p-6 flex flex-col gap-6;
   background: transparent;
-  padding-bottom: 4rem; /* ensure footer doesn't overlap content when scrolling */
 }
 
 /* Custom Scrollbar */
@@ -216,8 +215,7 @@
   border: 1px solid var(--card-border);
   box-shadow: 0 10px 15px -3px var(--card-shadow);
   background: var(--panel-bg);
-  overflow: hidden;
-  min-height: 160px;
+  flex-shrink: 0;
 }
 
 @media (min-width: 768px) {
@@ -230,31 +228,22 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 0.75rem;
-  font-weight: 800;
+  font-size: 0.85rem;
+  font-weight: 600;
   color: #a1a1aa;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
   position: relative;
-  margin-top: -0.25rem;
-  margin-bottom: 0.25rem;
-  padding: 0.5rem 0.75rem;
-  border-radius: 0.5rem;
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.03);
+  margin-bottom: 0.75rem;
   z-index: 20;
 }
 
 .summary-league-text {
-  color: #f472b6;
+  color: #a1a1aa;
 }
 
 .summary-status-text {
-  background: #27272a;
-  color: #d4d4d8;
-  border-radius: 0.25rem;
-  padding: 0.125rem 0.5rem;
-  font-weight: 700;
+  color: #ffffff;
+  font-weight: 500;
+  font-size: 0.85rem;
 }
 
 .summary-score-row {
@@ -279,62 +268,56 @@
 }
 
 .summary-crest {
-  width: 3.5rem;
-  height: 3.5rem;
-  object-contain: fill;
-  background: #ffffff;
-  border-radius: 0.5rem;
-  padding: 0.25rem;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  width: 3rem;
+  height: 3rem;
+  object-fit: contain;
 }
 
 @media (min-width: 768px) {
   .summary-crest {
-    width: 4.5rem;
-    height: 4.5rem;
+    width: 3.75rem;
+    height: 3.75rem;
   }
 }
 
 .summary-team-name {
-  font-weight: 800;
-  font-size: 0.875rem;
-  color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: #ffffff;
+  text-align: center;
+  margin-top: 0.25rem;
 }
 
 @media (min-width: 768px) {
   .summary-team-name {
-    font-size: 1rem;
+    font-size: 1.15rem;
   }
 }
 
 .summary-score-display {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 1.5rem;
   flex-shrink: 0;
 }
 
 .score-number {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  font-size: 2.25rem;
-  font-weight: 900;
-  color: var(--text-primary);
+  font-size: 2.75rem;
+  font-weight: 700;
+  color: #ffffff;
 }
 
 @media (min-width: 768px) {
   .score-number {
-    font-size: 3rem;
+    font-size: 3.75rem;
   }
 }
 
 .score-divider {
-  color: #71717a;
-  font-weight: 700;
-  font-size: 1.5rem;
+  color: #52525b;
+  font-weight: 500;
+  font-size: 2.5rem;
 }
 
 .goals-panel {
@@ -654,37 +637,27 @@
 }
 
 .timeline-wrapper {
-  @apply relative flex flex-col gap-6 pl-6 md:pl-0;
+  @apply relative flex flex-col gap-6 pl-0;
 }
 
 .timeline-line {
-  @apply absolute left-[15px] md:left-1/2 top-2 bottom-2 w-0.5 bg-zinc-300 dark:bg-zinc-800/80 -translate-x-1/2;
+  @apply absolute left-6 top-2 bottom-2 w-0.5 bg-zinc-300 dark:bg-zinc-800/80 -translate-x-1/2;
 }
 
 .timeline-row {
-  @apply relative flex flex-col md:flex-row items-start md:items-center justify-between w-full min-h-[48px];
+  @apply relative flex items-start w-full min-h-[48px];
 }
 
 .timeline-time-badge {
-  @apply absolute left-[15px] md:left-1/2 top-1.5 md:top-1/2 -translate-x-1/2 md:-translate-y-1/2 z-10 w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800 border-2 border-zinc-300 dark:border-zinc-700 flex items-center justify-center font-mono text-[10px] font-black text-zinc-800 dark:text-white shadow-md;
+  @apply absolute left-6 top-2 -translate-x-1/2 z-10 w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800 border-2 border-zinc-300 dark:border-zinc-700 flex items-center justify-center font-mono text-[10px] font-black text-zinc-800 dark:text-white shadow-md;
 }
 
 .timeline-event-card {
-  @apply bg-zinc-100/40 dark:bg-[#2b2c30]/40 border border-zinc-200 dark:border-zinc-800/60 rounded-lg p-3 w-[85%] md:w-[45%] ml-8 md:ml-0 flex flex-col gap-1 transition-all hover:bg-zinc-200/40 dark:hover:bg-zinc-800/40;
+  @apply bg-zinc-100/40 dark:bg-[#2b2c30]/40 border border-zinc-200 dark:border-zinc-800/60 rounded-lg p-3 flex-1 ml-12 flex flex-col gap-1 transition-all hover:bg-zinc-200/40 dark:hover:bg-zinc-800/40;
 }
 
 .timeline-goal-card {
-  @apply w-[88%] md:w-[52%] ml-8 md:ml-0 rounded-xl border overflow-hidden shadow-lg;
-}
-
-.timeline-goal-home {
-  @apply border-fuchsia-500/40;
-  background: linear-gradient(180deg, rgba(126,34,206,0.95) 0%, rgba(88,28,135,0.92) 100%);
-}
-
-.timeline-goal-away {
-  @apply border-amber-500/40;
-  background: linear-gradient(180deg, rgba(180,83,9,0.95) 0%, rgba(120,53,15,0.92) 100%);
+  @apply flex-1 ml-12 rounded-xl border overflow-hidden shadow-lg;
 }
 
 .timeline-goal-header {
@@ -735,30 +708,9 @@
   @apply text-xs font-bold text-zinc-800 dark:text-zinc-200;
 }
 
-@media (min-width: 768px) {
-  .home-event-row {
-    @apply flex-row-reverse;
-  }
-  .home-event-row .timeline-event-card {
-    @apply text-right items-end mr-[5%] ml-0;
-  }
-  .home-event-row .event-card-header {
-    @apply flex-row-reverse;
-  }
-  .away-event-row .timeline-event-card {
-    @apply ml-[5%] mr-0;
-  }
-}
-
 /* Overlay Footer */
 .overlay-footer {
-  @apply mt-4 pt-4 border-t border-zinc-800/60 flex flex-col gap-1 text-[11px] font-semibold text-zinc-500;
-  position: sticky;
-  bottom: 0;
-  z-index: 30;
-  background: linear-gradient(180deg, rgba(32,33,36,0.0), rgba(32,33,36,1));
-  padding-bottom: 0.75rem;
-  backdrop-filter: blur(4px);
+  @apply mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800/60 flex flex-col gap-1 text-[11px] font-semibold text-zinc-500 pb-3;
 }
 
 .footer-venue {
