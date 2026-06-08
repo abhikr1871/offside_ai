@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { getCurrentUser } from "../../lib/auth";
+import FloatingSettings from "../../components/FloatingSettings";
 
 interface TeamOption {
   id?: number;
@@ -281,8 +282,8 @@ export default function OnboardingPage() {
       const storageKey = `followed_teams:${email}`;
       localStorage.setItem(storageKey, JSON.stringify(followedTeams));
 
-      // Successfully onboarded, route to Home
-      window.location.href = "/";
+      // Successfully onboarded, route to Dashboard
+      window.location.href = "/dashboard";
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
       setSubmitting(false);
@@ -297,18 +298,7 @@ export default function OnboardingPage() {
 
   return (
     <main className="onboarding-page font-sans selection:bg-emerald-500 selection:text-white relative">
-      {/* Background elements */}
-      <div className="fixed inset-0 w-full h-full pointer-events-none select-none z-[-1] overflow-hidden">
-        <video
-          className="w-full h-full object-cover bg-video-element"
-          src="/video2.mp4"
-          autoPlay
-          muted
-          loop
-          playsInline
-        />
-        <div className="absolute inset-0 bg-white/20 dark:bg-[#090a0f]/65 backdrop-blur-[2px] bg-gradient-to-tr from-emerald-500/10 via-cyan-400/5 to-lime-500/10 dark:from-transparent dark:via-transparent dark:to-transparent" />
-      </div>
+      <FloatingSettings />
 
       <div className="onboarding-shell">
         {/* Onboarding Shell Card */}

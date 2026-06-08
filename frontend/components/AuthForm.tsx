@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import React, { useState } from "react";
 import { loginUser, signUpUser } from "../lib/auth";
+import FloatingSettings from "./FloatingSettings";
 
 interface AuthFormProps {
   mode: "login" | "signup";
@@ -28,7 +29,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
         window.location.href = "/onboarding";
       } else {
         await loginUser(email, password);
-        window.location.href = "/";
+        window.location.href = "/dashboard";
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -37,6 +38,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
 
   return (
     <main className="auth-page">
+      <FloatingSettings />
       <div className="auth-shell">
         <section className="auth-brand-panel">
           {isSignup ? (

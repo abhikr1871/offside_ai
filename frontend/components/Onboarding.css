@@ -100,13 +100,19 @@
 
 /* League Tab Row */
 .league-tab-row {
-  @apply flex flex-wrap gap-1.5 p-1 rounded-xl;
+  @apply flex overflow-x-auto gap-1.5 p-1 rounded-xl;
   background: var(--panel-bg);
   border: 1px solid var(--border-light);
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.league-tab-row::-webkit-scrollbar {
+  display: none;
 }
 
 .league-tab-btn {
-  @apply px-3 py-1.5 rounded-lg text-xs font-bold transition-all uppercase tracking-wider cursor-pointer;
+  @apply px-3 py-1.5 rounded-lg text-xs font-bold transition-all uppercase tracking-wider cursor-pointer whitespace-nowrap flex-shrink-0;
   color: var(--text-secondary);
 }
 

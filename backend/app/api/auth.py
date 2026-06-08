@@ -173,3 +173,52 @@ async def update_profile(profile: UserProfileUpdate):
         "onboarded": True
     })
     return {"status": "success", "message": "Profile updated successfully (mock)."}
+
+@router.get("/profile")
+async def get_profile(email: str):
+    email = email.strip().lower()
+
+    if vector_search_manager.db is not None:
+        try:
+            users_col = vector_search_manager.db["users"]
+            user = await users_col.find_one({"email": email})
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found.")
+            return {
+                "name": user.get("name", "User"),
+                "followed_teams": user.get("followed_teams", []),
+                "favorite_players": user.get("favorite_players", []),
+                "country": user.get("country", ""),
+                "city": user.get("city", ""),
+                "stadium": user.get("stadium", ""),
+                "street": user.get("street", ""),
+                "onboarded": user.get("onboarded", False)
+            }
+        except Exception as exc:
+            if isinstance(exc, HTTPException):
+                raise exc
+            raise HTTPException(status_code=500, detail=f"Database error during profile fetch: {str(exc)}")
+
+    if email not in MOCK_USERS_DB:
+        return {
+            "name": "Guest Fan",
+            "followed_teams": ["Arsenal"],
+            "favorite_players": ["Bukayo Saka"],
+            "country": "United Kingdom",
+            "city": "London",
+            "stadium": "Emirates Stadium",
+            "street": "Highbury Hill",
+            "onboarded": True
+        }
+
+    user = MOCK_USERS_DB[email]
+    return {
+        "name": user.get("name", "User"),
+        "followed_teams": user.get("followed_teams", []),
+        "favorite_players": user.get("favorite_players", []),
+        "country": user.get("country", ""),
+        "city": user.get("city", ""),
+        "stadium": user.get("stadium", ""),
+        "street": user.get("street", ""),
+        "onboarded": user.get("onboarded", False)
+    }

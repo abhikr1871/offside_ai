@@ -48,9 +48,25 @@ export default function Header() {
     } else {
       document.documentElement.classList.remove("no-bg-animation");
     }
+
+    const syncState = () => {
+      const isDark = document.documentElement.classList.contains("dark");
+      setTheme(isDark ? "dark" : "light");
+      const isAnimOff = document.documentElement.classList.contains("no-bg-animation");
+      setBgAnim(isAnimOff ? "off" : "on");
+    };
+
+    window.addEventListener("theme-changed", syncState);
+    window.addEventListener("bg-animation-changed", syncState);
+
     setTimeout(() => {
       window.dispatchEvent(new Event("bg-animation-changed"));
     }, 100);
+
+    return () => {
+      window.removeEventListener("theme-changed", syncState);
+      window.removeEventListener("bg-animation-changed", syncState);
+    };
   }, []);
 
   const toggleTheme = () => {
@@ -62,6 +78,7 @@ export default function Header() {
     } else {
       document.documentElement.classList.remove("dark");
     }
+    window.dispatchEvent(new Event("theme-changed"));
   };
 
   const toggleBgAnim = () => {

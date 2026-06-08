@@ -31,45 +31,8 @@ export default function Home() {
     fetchConfig();
   }, []);
 
-  useEffect(() => {
-    const video = document.querySelector(".bg-video-element") as HTMLVideoElement;
-    if (!video) return;
-
-    const syncVideoState = () => {
-      const isOff = document.documentElement.classList.contains("no-bg-animation");
-      if (isOff) {
-        video.pause();
-      } else {
-        video.play().catch(() => {});
-      }
-    };
-
-    // Run sync on mount (delayed slightly to ensure video elements are fully ready)
-    const timeoutId = setTimeout(syncVideoState, 150);
-
-    window.addEventListener("bg-animation-changed", syncVideoState);
-    return () => {
-      clearTimeout(timeoutId);
-      window.removeEventListener("bg-animation-changed", syncVideoState);
-    };
-  }, []);
-
   return (
     <div className="min-h-screen text-zinc-950 dark:text-white font-sans selection:bg-emerald-500 selection:text-white transition-colors duration-300 relative">
-      {/* Fullscreen Animated Background Video */}
-      <div className="fixed inset-0 w-full h-full pointer-events-none select-none z-[-1] overflow-hidden">
-        <video
-          className="w-full h-full object-cover bg-video-element"
-          src="/video2.mp4"
-          autoPlay
-          muted
-          loop
-          playsInline
-        />
-        {/* Dark/light overlay with slight blur and colorful matching tint in light mode */}
-        <div className="absolute inset-0 bg-video-overlay bg-white/20 dark:bg-[#090a0f]/65 backdrop-blur-[2px] bg-gradient-to-tr from-emerald-500/10 via-cyan-400/5 to-lime-500/10 dark:from-transparent dark:via-transparent dark:to-transparent" />
-      </div>
-
       <Header />
 
       {/* Centered rectangular box for LiveScore */}

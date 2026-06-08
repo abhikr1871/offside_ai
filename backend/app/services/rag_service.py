@@ -12,6 +12,13 @@ try:
 except ImportError:
     HAS_VERTEX_AI = False
 
+# Try imports for Google Generative AI (AI Studio)
+try:
+    import google.generativeai as genai
+    HAS_GENAI = True
+except ImportError:
+    HAS_GENAI = False
+
 logger = logging.getLogger("offside_ai.rag_service")
 
 # GCP Project details
@@ -21,10 +28,23 @@ LOCATION = os.getenv("GCP_LOCATION", "us-central1")
 class RAGService:
     def __init__(self):
         self.vertex_initialized = False
+        self.genai_initialized = False
         self.embedding_model = None
         self.llm_model = None
 
-        if HAS_VERTEX_AI and PROJECT_ID:
+        # Check standard AI Studio API Key first (primary developer key)
+        api_key = os.getenv("GEMINI_API_KEY")
+        if HAS_GENAI and api_key:
+            try:
+                genai.configure(api_key=api_key)
+                self.llm_model = genai.GenerativeModel("gemini-1.5-pro")
+                self.genai_initialized = True
+                logger.info("Successfully initialized Google AI Studio client (Gemini SDK).")
+            except Exception as e:
+                logger.error(f"Failed to initialize Google AI Studio client: {e}")
+
+        # Fallback to GCP Vertex AI if AI Studio is not configured
+        if not self.genai_initialized and HAS_VERTEX_AI and PROJECT_ID:
             try:
                 vertexai.init(project=PROJECT_ID, location=LOCATION)
                 self.embedding_model = TextEmbeddingModel.from_pretrained("text-embedding-004")
@@ -33,20 +53,31 @@ class RAGService:
                 logger.info("Successfully initialized GCP Vertex AI client.")
             except Exception as e:
                 logger.error(f"Failed to initialize Vertex AI client: {e}. Falling back to mock RAG.")
-        else:
-            logger.info("GCP_PROJECT not configured. Running in Local Mock RAG Mode.")
+
+        if not self.genai_initialized and not self.vertex_initialized:
+            logger.info("GCP_PROJECT and GEMINI_API_KEY not configured. Running in Local Mock RAG Mode.")
 
     def _get_embedding(self, text: str) -> List[float]:
         """
-        Generates 768-dimension embeddings using Vertex AI text-embedding-004.
-        Returns empty list in mock mode.
+        Generates 768-dimension embeddings using Vertex AI or Google AI Studio.
         """
+        if self.genai_initialized:
+            try:
+                result = genai.embed_content(
+                    model="models/text-embedding-004",
+                    content=text,
+                    task_type="retrieval_query"
+                )
+                return result["embedding"]
+            except Exception as e:
+                logger.error(f"Google AI Studio embedding generation failed: {e}")
+
         if self.vertex_initialized and self.embedding_model:
             try:
                 embeddings = self.embedding_model.get_embeddings([text])
                 return embeddings[0].values
             except Exception as e:
-                logger.error(f"Failed to generate embedding: {e}")
+                logger.error(f"Vertex AI embedding generation failed: {e}")
         return []
 
     async def answer_schedule_query(self, query: str) -> Dict[str, Any]:
@@ -64,7 +95,7 @@ class RAGService:
         )
 
         # 3. Generate response
-        if self.vertex_initialized and self.llm_model:
+        if (self.genai_initialized or self.vertex_initialized) and self.llm_model:
             try:
                 # Build context string
                 context = "\n".join([
@@ -86,14 +117,15 @@ class RAGService:
                 )
 
                 response = self.llm_model.generate_content(prompt)
+                model_used = "Gemini 1.5 Pro (Google AI Studio)" if self.genai_initialized else "Gemini 1.5 Pro (Vertex AI)"
                 return {
                     "query": query,
                     "answer": response.text.strip(),
                     "sources": retrieved_docs,
-                    "model_used": f"Gemini 1.5 Pro (Vertex AI - {mode_name})"
+                    "model_used": f"{model_used} - {mode_name}"
                 }
             except Exception as e:
-                logger.error(f"Vertex AI Generation failed: {e}. Falling back to mock answer generation.")
+                logger.error(f"Generative AI Generation failed: {e}. Falling back to mock answer generation.")
 
         # Local mock LLM generator fallback
         return self._generate_mock_answer(query, retrieved_docs)

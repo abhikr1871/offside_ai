@@ -7,6 +7,7 @@
 @import "../components/AuthForm.css";
 @import "../components/JourneyHub.css";
 @import "../components/Onboarding.css";
+@import "./dashboard/dashboard.css";
 
 
 :root {
