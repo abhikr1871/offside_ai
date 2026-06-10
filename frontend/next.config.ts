@@ -1,9 +1,13 @@
 import type { NextConfig } from "next";
+import { PHASE_DEVELOPMENT_SERVER } from "next/constants";
 
-const nextConfig: NextConfig = {
-  // Build output goes to AppData/Local which is NOT synced by OneDrive.
-  // This prevents EPERM file-lock errors caused by OneDrive locking .next/trace.
-  distDir: "../../../../AppData/Local/offside-ai-next"
+const nextConfig = (phase: string): NextConfig => {
+  const isDev = phase === PHASE_DEVELOPMENT_SERVER;
+  return {
+    distDir: isDev
+      ? undefined
+      : "../../../../AppData/Local/offside-ai-next-sandbox"
+  };
 };
 
 export default nextConfig;

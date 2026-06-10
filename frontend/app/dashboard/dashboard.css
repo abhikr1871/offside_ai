@@ -1005,3 +1005,206 @@
   height: 140px;
   border-radius: 1.25rem;
 }
+
+/* ============================================================
+   PREMIUM JOURNEY PLANNER UI UPGRADES
+   ============================================================ */
+
+.journey-stepper-container {
+  padding: 0.5rem 0 1.25rem;
+  position: relative;
+}
+
+.journey-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  width: 100%;
+  margin-top: 1rem;
+}
+
+.journey-stepper::before {
+  content: '';
+  position: absolute;
+  top: 1.75rem;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.06);
+  z-index: 1;
+}
+
+.dark .journey-stepper::before {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.step-connector-progress {
+  position: absolute;
+  top: 1.75rem;
+  left: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #10b981 0%, #7c3aed 100%);
+  z-index: 2;
+  transition: width 0.4s ease;
+}
+
+.step-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  z-index: 3;
+  width: 120px;
+  cursor: pointer;
+  text-align: center;
+}
+
+.step-circle {
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 50%;
+  background: rgba(20, 24, 33, 0.85);
+  border: 2px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  color: var(--text-secondary);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.step-node.active .step-circle {
+  color: white;
+  border-color: #10b981;
+  background: rgba(16, 185, 129, 0.12);
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.35);
+  transform: scale(1.1);
+}
+
+.step-node.active.ai-active .step-circle {
+  border-color: #7c3aed;
+  background: rgba(124, 58, 237, 0.12);
+  box-shadow: 0 0 16px rgba(124, 58, 237, 0.35);
+}
+
+.step-node.completed .step-circle {
+  color: #10b981;
+  border-color: #10b981;
+  background: rgba(16, 185, 129, 0.06);
+}
+
+.step-node.completed.ai-completed .step-circle {
+  color: #a78bfa;
+  border-color: #7c3aed;
+  background: rgba(124, 58, 237, 0.06);
+}
+
+.step-label-text {
+  margin-top: 0.625rem;
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-secondary);
+  transition: color 0.3s ease;
+}
+
+.step-node.active .step-label-text {
+  color: #10b981;
+}
+
+.step-node.active.ai-active .step-label-text {
+  color: #a78bfa;
+}
+
+.step-node.completed .step-label-text {
+  color: var(--text-primary);
+  opacity: 0.8;
+}
+
+.premium-mode-title {
+  font-size: 1.6rem;
+  font-weight: 950;
+  background: linear-gradient(135deg, #ffffff 0%, #a1a1aa 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: -0.03em;
+}
+
+.premium-mode-subtitle {
+  font-size: 0.8rem;
+  color: #71717a;
+  font-weight: 500;
+}
+
+.premium-select-card {
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  transform: translateZ(0);
+}
+
+.premium-select-card:hover {
+  transform: translateY(-4px) scale(1.01);
+}
+
+.glow-card-green:hover {
+  border-color: rgba(16, 185, 129, 0.4) !important;
+  box-shadow: 0 20px 40px -12px rgba(16, 185, 129, 0.18),
+              0 0 20px -4px rgba(16, 185, 129, 0.1);
+}
+
+.glow-card-purple:hover {
+  border-color: rgba(124, 58, 237, 0.4) !important;
+  box-shadow: 0 20px 40px -12px rgba(124, 58, 237, 0.18),
+              0 0 20px -4px rgba(124, 58, 237, 0.1);
+}
+
+.premium-icon-container {
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  transition: all 0.3s ease;
+}
+
+.glow-card-green:hover .premium-icon-container {
+  background: rgba(16, 185, 129, 0.15) !important;
+  border-color: rgba(16, 185, 129, 0.4) !important;
+  box-shadow: 0 0 15px rgba(16, 185, 129, 0.15);
+}
+
+.glow-card-purple:hover .premium-icon-container {
+  background: rgba(124, 58, 237, 0.15) !important;
+  border-color: rgba(124, 58, 237, 0.4) !important;
+  box-shadow: 0 0 15px rgba(124, 58, 237, 0.15);
+}
+
+/* Animations for loading log terminals */
+.animate-blink {
+  animation: blink 0.8s infinite;
+}
+
+.animate-slide-up {
+  animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+

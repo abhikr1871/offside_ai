@@ -11,6 +11,10 @@ class AgentChatRequest(BaseModel):
     email: str
     query: str
 
+class AgentPlanRequest(BaseModel):
+    email: str
+    prompt: str
+
 @router.post("/chat")
 async def chat_with_agent(req: AgentChatRequest):
     try:
@@ -18,3 +22,12 @@ async def chat_with_agent(req: AgentChatRequest):
         return response
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/plan")
+async def plan_journey_with_ai(req: AgentPlanRequest):
+    try:
+        response = await agent_service.run_planning(req.email, req.prompt)
+        return response
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+

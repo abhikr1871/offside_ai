@@ -31,7 +31,7 @@ def resolve_stadium_coords(stadium: str) -> tuple:
     for key, coords in STADIUM_COORDS.items():
         if key in stadium_lower or stadium_lower in key:
             return coords
-            
+
     # OpenStreetMap Nominatim geocoding lookup
     import urllib.parse
     try:
@@ -46,23 +46,23 @@ def resolve_stadium_coords(stadium: str) -> tuple:
     except Exception as exc:
         sys.stderr.write(f"Geocoding error for {stadium}: {exc}\n")
         sys.stderr.flush()
-        
+
     return 51.5549, -0.108436 # Fallback to London coordinates
 
 def parse_airbnb_price(res, check_in=None, check_out=None):
     display_price = res.get("structuredDisplayPrice", {})
     if not display_price:
         return 85.0
-        
+
     primary_line = display_price.get("primaryLine", {}) or {}
     price_str = primary_line.get("price", "")
     acc_label = primary_line.get("accessibilityLabel", "")
-    
+
     # Try 1: Look for "per night" in accessibilityLabel
     per_night_match = re.search(r"\$\s*([\d,]+(?:\.\d+)?)\s*per night", acc_label, re.IGNORECASE)
     if per_night_match:
         return float(per_night_match.group(1).replace(",", ""))
-        
+
     # Try 2: Look for "for X nights" in accessibilityLabel
     for_nights_match = re.search(r"\$\s*([\d,]+(?:\.\d+)?)\s*for\s*(\d+)\s*nights?", acc_label, re.IGNORECASE)
     if for_nights_match:
@@ -70,7 +70,7 @@ def parse_airbnb_price(res, check_in=None, check_out=None):
         nights = int(for_nights_match.group(2))
         if nights > 0:
             return round(total / nights, 2)
-            
+
     # Try 3: Check explanationData -> priceDetails -> items
     explanation = display_price.get("explanationData", {}) or {}
     details = explanation.get("priceDetails", [])
@@ -79,11 +79,11 @@ def parse_airbnb_price(res, check_in=None, check_out=None):
         if items and len(items) > 0:
             desc = items[0].get("description", "")
             item_price_str = items[0].get("priceString", "")
-            
+
             per_night_in_desc = re.search(r"x\s*\$\s*([\d,]+(?:\.\d+)?)", desc, re.IGNORECASE)
             if per_night_in_desc:
                 return float(per_night_in_desc.group(1).replace(",", ""))
-                
+
             item_price_match = re.search(r"\$\s*([\d,]+(?:\.\d+)?)", item_price_str)
             if item_price_match:
                 subtotal = float(item_price_match.group(1).replace(",", ""))
@@ -99,7 +99,7 @@ def parse_airbnb_price(res, check_in=None, check_out=None):
     price_match = re.search(r"\$\s*([\d,]+(?:\.\d+)?)", price_str or acc_label)
     if price_match:
         total_price = float(price_match.group(1).replace(",", ""))
-        
+
     if check_in and check_out:
         from datetime import datetime
         try:
@@ -110,33 +110,33 @@ def parse_airbnb_price(res, check_in=None, check_out=None):
                 return round(total_price / nights, 2)
         except Exception:
             pass
-            
+
     # Try 5: If we found any price, return it (might be per-night or total)
     if total_price > 0.0:
         if total_price > 500 and not (check_in and check_out):
             return round(total_price / 5, 2)
         return total_price
-        
+
     return 85.0
 
 def query_airbnb(stadium_name: str, lat: float, lng: float, check_in: str, check_out: str, max_price: float = None) -> list:
     from math import radians, cos, sin, asin, sqrt
     import base64
     import random
-    
+
     # Calculate bounding box of ~5 miles radius around stadium coordinates
     lat_delta = 5.0 / 69.0
     lon_delta = 5.0 / (69.0 * cos(radians(lat)))
-    
+
     ne_lat = lat + lat_delta
     ne_lng = lng + lon_delta
     sw_lat = lat - lat_delta
     sw_lng = lng - lon_delta
-    
+
     base_url = "https://www.airbnb.com"
     search_path = f"/s/{urllib.parse.quote(stadium_name)}/homes"
     url = f"{base_url}{search_path}"
-    
+
     params = {
         "ne_lat": str(ne_lat),
         "ne_lng": str(ne_lng),
@@ -145,22 +145,22 @@ def query_airbnb(stadium_name: str, lat: float, lng: float, check_in: str, check
         "adults": "1",
         "currency": "USD"
     }
-    
+
     if check_in:
         params["checkin"] = check_in
     if check_out:
         params["checkout"] = check_out
-        
+
     if max_price is not None:
         params["price_max"] = str(int(max_price))
-        
+
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept-Language": "en-US,en;q=0.9",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
         "Cache-Control": "no-cache",
     }
-    
+
     try:
         with httpx.Client(timeout=10.0, follow_redirects=True) as client:
             resp = client.get(url, params=params, headers=headers)
@@ -168,50 +168,50 @@ def query_airbnb(stadium_name: str, lat: float, lng: float, check_in: str, check
                 sys.stderr.write(f"Airbnb scrape HTTP error: {resp.status_code}\n")
                 sys.stderr.flush()
                 return []
-                
+
             soup = BeautifulSoup(resp.text, "html.parser")
             script_el = soup.find("script", id="data-deferred-state-0")
             if not script_el or not script_el.string:
                 sys.stderr.write("Airbnb scrape: Could not find script #data-deferred-state-0\n")
                 sys.stderr.flush()
                 return []
-                
+
             data = json.loads(script_el.string)
             results_root = data["niobeClientData"][0][1]["data"]["presentation"]["staysSearch"]["results"]
             search_results = results_root.get("searchResults", [])
-            
+
             results = []
             for res in search_results:
                 if not isinstance(res, dict):
                     continue
-                    
+
                 listing = res.get("listing", res.get("demandStayListing", {}))
                 if not listing or not isinstance(listing, dict):
                     continue
-                    
+
                 listing_id = listing.get("id")
                 if not listing_id:
                     continue
-                    
+
                 # Decode ID
                 try:
                     decoded_id = base64.b64decode(listing_id).decode("utf-8").split(":")[1]
                 except Exception:
                     decoded_id = listing_id
-                
+
                 title = res.get("title", "")
                 if not title:
                     title = res.get("structuredContent", {}).get("primaryLine", {}).get("body", "Airbnb Listing")
-                    
+
                 subtitle = res.get("subtitle", "")
                 if not subtitle:
                     subtitle = res.get("structuredContent", {}).get("secondaryLine", {}).get("body", "")
-                    
+
                 name = f"{subtitle} - {title}" if subtitle else title
-                
+
                 # Parse price
                 price_usd = parse_airbnb_price(res, check_in, check_out)
-                
+
                 # Parse rating
                 rating = 4.5
                 rating_label = res.get("avgRatingA11yLabel", "")
@@ -225,12 +225,12 @@ def query_airbnb(stadium_name: str, lat: float, lng: float, check_in: str, check
                         rating_match = re.match(r"([\d\.]+)", rating_loc)
                         if rating_match:
                             rating = float(rating_match.group(1))
-                            
+
                 # Get coordinates & calculate distance
                 coord = listing.get("location", {}).get("coordinate", {}) or {}
                 lat_h = coord.get("latitude")
                 lng_h = coord.get("longitude")
-                
+
                 if lat_h is not None and lng_h is not None:
                     # Calculate distance via haversine
                     def haversine(lon1, lat1, lon2, lat2):
@@ -244,7 +244,7 @@ def query_airbnb(stadium_name: str, lat: float, lng: float, check_in: str, check
                     distance = haversine(lng, lat, lng_h, lat_h)
                 else:
                     distance = round(random.uniform(0.5, 3.5), 2)
-                    
+
                 # Populate amenities
                 amenities = ["WiFi"]
                 name_lower = name.lower()
@@ -258,7 +258,7 @@ def query_airbnb(stadium_name: str, lat: float, lng: float, check_in: str, check
                     amenities.append("Gym")
                 if "ac" in name_lower or "air conditioning" in name_lower:
                     amenities.append("AC")
-                    
+
                 # Deterministically inject based on id hash
                 h = int(hashlib.sha256(decoded_id.encode("utf-8")).hexdigest(), 16)
                 if h % 3 == 0 and "Kitchen" not in amenities:
@@ -269,10 +269,15 @@ def query_airbnb(stadium_name: str, lat: float, lng: float, check_in: str, check
                     amenities.append("Free Parking")
                 if h % 7 == 0 and "Gym" not in amenities:
                     amenities.append("Gym")
-                    
+
                 if max_price is not None and price_usd > max_price:
                     continue
-                    
+
+                pictures = res.get("contextualPictures", [])
+                image_url = None
+                if pictures and isinstance(pictures, list) and len(pictures) > 0:
+                    image_url = pictures[0].get("picture")
+
                 results.append({
                     "name": name,
                     "type": "airbnb",
@@ -280,7 +285,8 @@ def query_airbnb(stadium_name: str, lat: float, lng: float, check_in: str, check
                     "rating": rating,
                     "distance_miles": distance,
                     "amenities": amenities,
-                    "provider": "Airbnb (OpenBNB)"
+                    "provider": "Airbnb (OpenBNB)",
+                    "image_url": image_url
                 })
             return results
     except Exception as exc:
@@ -292,30 +298,30 @@ def query_hotelbeds(lat: float, lng: float, check_in: str, check_out: str, max_p
     api_key = os.environ.get("HBX_API_KEY")
     secret = os.environ.get("HBX_SECRET")
     env = os.environ.get("HBX_ENV", "test").strip().lower()
-    
+
     if not api_key or not secret:
         return []
-        
+
     base_url = "https://api.hotelbeds.com" if env == "prod" else "https://api.test.hotelbeds.com"
     endpoint = f"{base_url}/hotel-api/1.0/hotels"
-    
+
     timestamp = str(int(time.time()))
     signature = hashlib.sha256((api_key + secret + timestamp).encode("utf-8")).hexdigest()
-    
+
     headers = {
         "Api-key": api_key,
         "X-Signature": signature,
         "Accept": "application/json",
         "Content-Type": "application/json"
     }
-    
+
     if not check_in or not check_out:
         from datetime import datetime, timedelta
         dt_in = datetime.utcnow() + timedelta(days=30)
         dt_out = dt_in + timedelta(days=1)
         check_in = dt_in.strftime("%Y-%m-%d")
         check_out = dt_out.strftime("%Y-%m-%d")
-        
+
     payload = {
         "stay": {
             "checkIn": check_in,
@@ -335,7 +341,7 @@ def query_hotelbeds(lat: float, lng: float, check_in: str, check_out: str, max_p
             "unit": "km"
         }
     }
-    
+
     try:
         with httpx.Client() as client:
             resp = client.post(endpoint, json=payload, headers=headers, timeout=10.0)
@@ -343,7 +349,7 @@ def query_hotelbeds(lat: float, lng: float, check_in: str, check_out: str, max_p
                 sys.stderr.write(f"Hotelbeds API error {resp.status_code}: {resp.text}\n")
                 sys.stderr.flush()
                 return []
-                
+
             data = resp.json()
             hotels_data = data.get("hotels", {}).get("hotels", [])
             results = []
@@ -354,10 +360,10 @@ def query_hotelbeds(lat: float, lng: float, check_in: str, check_out: str, max_p
                     rating = float(rating_stars.replace("EST", "")) if "EST" in rating_stars else 4.0
                 except ValueError:
                     rating = 4.0
-                    
+
                 lat_h = float(h.get("latitude")) if h.get("latitude") else lat
                 lng_h = float(h.get("longitude")) if h.get("longitude") else lng
-                
+
                 from math import radians, cos, sin, asin, sqrt
                 def haversine(lon1, lat1, lon2, lat2):
                     lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
@@ -367,16 +373,16 @@ def query_hotelbeds(lat: float, lng: float, check_in: str, check_out: str, max_p
                     c = 2 * asin(sqrt(a))
                     r = 3956
                     return round(c * r, 2)
-                
+
                 distance = haversine(lng, lat, lng_h, lat_h)
-                
+
                 min_price = None
                 for room in h.get("rooms", []):
                     for rate in room.get("rates", []):
                         net = float(rate.get("net", 999))
                         if min_price is None or net < min_price:
                             min_price = net
-                            
+
                 amenities = []
                 for facility in h.get("facilities", []):
                     facility_desc = facility.get("description", "").lower()
@@ -392,17 +398,17 @@ def query_hotelbeds(lat: float, lng: float, check_in: str, check_out: str, max_p
                         amenities.append("Bar")
                     if "breakfast" in facility_desc:
                         amenities.append("Free Breakfast")
-                        
+
                 amenities = list(set(amenities))
                 if not amenities:
                     amenities = ["WiFi"]
-                    
+
                 if min_price is None:
                     min_price = 75.0
-                    
+
                 if max_price is not None and min_price > max_price:
                     continue
-                    
+
                 results.append({
                     "name": name,
                     "type": "hotel",
@@ -422,24 +428,24 @@ def query_liteapi(lat: float, lng: float, check_in: str, check_out: str, max_pri
     api_key = os.environ.get("LITEAPI_KEY")
     if not api_key:
         return []
-        
+
     is_sandbox = api_key.strip().startswith("sand_")
     base_url = "https://sandbox-api.liteapi.travel" if is_sandbox else "https://api.liteapi.travel"
     endpoint = f"{base_url}/v3.0/hotels/rates"
-    
+
     headers = {
         "accept": "application/json",
         "content-type": "application/json",
         "X-API-Key": api_key.strip()
     }
-    
+
     if not check_in or not check_out:
         from datetime import datetime, timedelta
         dt_in = datetime.utcnow() + timedelta(days=30)
         dt_out = dt_in + timedelta(days=1)
         check_in = dt_in.strftime("%Y-%m-%d")
         check_out = dt_out.strftime("%Y-%m-%d")
-        
+
     payload = {
         "checkin": check_in,
         "checkout": check_out,
@@ -455,7 +461,7 @@ def query_liteapi(lat: float, lng: float, check_in: str, check_out: str, max_pri
         "longitude": lng,
         "radius": 5000 # in meters (5km)
     }
-    
+
     try:
         with httpx.Client() as client:
             resp = client.post(endpoint, json=payload, headers=headers, timeout=10.0)
@@ -463,16 +469,16 @@ def query_liteapi(lat: float, lng: float, check_in: str, check_out: str, max_pri
                 sys.stderr.write(f"LiteAPI returned status {resp.status_code}: {resp.text}\n")
                 sys.stderr.flush()
                 return []
-                
+
             data = resp.json()
             hotels_list = data.get("data", [])
             results = []
-            
+
             for item in hotels_list:
                 name = item.get("name", "Unknown Hotel")
                 lat_h = float(item.get("latitude")) if item.get("latitude") else lat
                 lng_h = float(item.get("longitude")) if item.get("longitude") else lng
-                
+
                 from math import radians, cos, sin, asin, sqrt
                 def haversine(lon1, lat1, lon2, lat2):
                     lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
@@ -482,21 +488,21 @@ def query_liteapi(lat: float, lng: float, check_in: str, check_out: str, max_pri
                     c = 2 * asin(sqrt(a))
                     r = 3956
                     return round(c * r, 2)
-                    
+
                 distance = haversine(lng, lat, lng_h, lat_h)
-                
+
                 min_price = None
                 for room in item.get("rooms", []):
                     for rate in room.get("rates", []):
                         retail = float(rate.get("retailRate", {}).get("amount", 999))
                         if min_price is None or retail < min_price:
                             min_price = retail
-                            
+
                 if min_price is None:
                     min_price = 85.0
-                    
+
                 rating = float(item.get("stars", 4.0))
-                
+
                 amenities = []
                 facilities = item.get("facilities", [])
                 if not isinstance(facilities, list):
@@ -515,14 +521,14 @@ def query_liteapi(lat: float, lng: float, check_in: str, check_out: str, max_pri
                         amenities.append("Bar")
                     if "breakfast" in f_desc:
                         amenities.append("Free Breakfast")
-                        
+
                 amenities = list(set(amenities))
                 if not amenities:
                     amenities = ["WiFi"]
-                    
+
                 if max_price is not None and min_price > max_price:
                     continue
-                    
+
                 results.append({
                     "name": name,
                     "type": "hotel",
@@ -543,7 +549,7 @@ def merge_stays(hbx_results: list, lite_results: list) -> list:
     for item in hbx_results:
         norm_name = "".join(e for e in item["name"].lower() if e.isalnum())
         merged[norm_name] = item
-        
+
     for item in lite_results:
         norm_name = "".join(e for e in item["name"].lower() if e.isalnum())
         if norm_name in merged:
@@ -555,8 +561,250 @@ def merge_stays(hbx_results: list, lite_results: list) -> list:
                 existing["provider"] = "Hotelbeds (Best Price)"
         else:
             merged[norm_name] = item
-            
+
     return list(merged.values())
+
+def fetch_google_directions(origin: str, destination: str, mode: str) -> list:
+    import os
+    import sys
+    import re
+    import math
+    import httpx
+
+    api_key = os.getenv("GOOGLE_MAPS_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    if not api_key:
+        return None
+
+    google_mode = "transit"
+    if mode == "walking":
+        google_mode = "walking"
+    elif mode == "cab":
+        google_mode = "driving"
+
+    url = "https://maps.googleapis.com/maps/api/directions/json"
+    params = {
+        "origin": origin,
+        "destination": destination,
+        "mode": google_mode,
+        "key": api_key
+    }
+
+    if google_mode == "driving":
+        params["departure_time"] = "now"
+
+    try:
+        with httpx.Client() as client:
+            resp = client.get(url, params=params, timeout=10.0)
+            if resp.status_code != 200:
+                return None
+            data = resp.json()
+            if data.get("status") != "OK":
+                return None
+
+            routes = []
+            for r in data.get("routes", []):
+                leg = r["legs"][0]
+                duration_mins = int(math.ceil(leg["duration"]["value"] / 60.0))
+
+                if google_mode == "transit":
+                    fare_obj = r.get("fare")
+                    cost = float(fare_obj["value"]) if fare_obj else 2.50
+                elif google_mode == "driving":
+                    distance_miles = leg["distance"]["value"] / 1609.34
+                    cost = float(round(5.0 + 2.50 * distance_miles, 2))
+                else:
+                    cost = 0.0
+
+                steps_list = []
+                for s in leg["steps"]:
+                    clean_instructions = re.sub('<[^<]+?>', '', s.get("html_instructions", ""))
+
+                    if "transit_details" in s:
+                        details = s["transit_details"]
+                        line_name = details.get("line", {}).get("short_name") or details.get("line", {}).get("name")
+                        stops = details.get("num_stops", 1)
+                        vehicle_type = details.get("line", {}).get("vehicle", {}).get("type", "transit")
+                        steps_list.append(f"Take {vehicle_type} line {line_name} ({stops} stops)")
+
+                        arr_stop = details.get("arrival_stop", {}).get("name")
+                        steps_list.append(f"☕ Break/relax point: rest or transfer at {arr_stop} Station (waiting time ~5 mins)")
+                    else:
+                        steps_list.append(clean_instructions)
+
+                steps_str = " ➔ ".join(steps_list)
+
+                routes.append({
+                    "mode": mode.capitalize() if mode != "cab" else "Taxi / Cab",
+                    "duration_minutes": duration_mins,
+                    "cost_usd": cost,
+                    "steps": steps_str
+                })
+            return routes
+    except Exception as exc:
+        sys.stderr.write(f"Error fetching Google Directions: {exc}\n")
+        sys.stderr.flush()
+        return None
+
+def fetch_google_nearby_recommendations(destination: str) -> dict:
+    import os
+    import sys
+    import httpx
+
+    api_key = os.getenv("GOOGLE_MAPS_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    if not api_key:
+        return None
+
+    coords = resolve_stadium_coords(destination)
+    if not coords:
+        return None
+
+    lat, lng = coords
+    url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
+
+    categories = {
+        "restaurants": "restaurant",
+        "convenience_stores": "convenience_store",
+        "pharmacies": "pharmacy",
+        "tourist_spots": "tourist_attraction"
+    }
+
+    recommendations = {}
+    try:
+        with httpx.Client() as client:
+            for cat_key, google_type in categories.items():
+                params = {
+                    "location": f"{lat},{lng}",
+                    "radius": 1500,
+                    "type": google_type,
+                    "key": api_key
+                }
+                resp = client.get(url, params=params, timeout=10.0)
+                if resp.status_code == 200:
+                    results = resp.json().get("results", [])
+                    places = []
+                    for p in results[:3]:
+                        places.append({
+                            "name": p.get("name"),
+                            "type": cat_key.replace("_", " ").rstrip("s").capitalize(),
+                            "rating": p.get("rating", 4.0),
+                            "distance_miles": round(0.1 + (0.3 * len(places)), 1),
+                            "address": p.get("vicinity", "")
+                        })
+                    recommendations[cat_key] = places
+            return recommendations if recommendations else None
+    except Exception as exc:
+        sys.stderr.write(f"Error fetching Google Places: {exc}\n")
+        sys.stderr.flush()
+        return None
+
+def get_mock_nearby_recommendations(stadium: str) -> dict:
+    stadium_lower = stadium.strip().lower()
+
+    if "emirates" in stadium_lower:
+        return {
+            "restaurants": [
+                {"name": "The Tollington Arms", "type": "Pub/Restaurant", "rating": 4.7, "distance_miles": 0.2, "address": "115 Hornsey Rd, London"},
+                {"name": "Piebury Corner", "type": "Gourmet Pies", "rating": 4.8, "distance_miles": 0.3, "address": "209-211 Holloway Rd, London"},
+                {"name": "Westerns Laundry", "type": "Seafood/Bar", "rating": 4.6, "distance_miles": 0.5, "address": "34 Drayton Park, London"}
+            ],
+            "convenience_stores": [
+                {"name": "Tesco Express Highbury", "type": "Grocery Store", "rating": 4.1, "distance_miles": 0.4, "address": "Benwell Rd, London"},
+                {"name": "Sainsbury's Local Holloway", "type": "Grocery Store", "rating": 4.2, "distance_miles": 0.5, "address": "25 Holloway Rd, London"}
+            ],
+            "pharmacies": [
+                {"name": "Well Pharmacy Islington", "type": "Pharmacy", "rating": 4.3, "distance_miles": 0.6, "address": "Highbury Corner, London"},
+                {"name": "Boots Pharmacy Holloway", "type": "Pharmacy", "rating": 4.4, "distance_miles": 0.7, "address": "Holloway Rd, London"}
+            ],
+            "tourist_spots": [
+                {"name": "Arsenal Museum & Stadium Tour", "type": "Museum/Attraction", "rating": 4.8, "distance_miles": 0.1, "address": "Emirates Stadium, London"},
+                {"name": "Highbury Fields Park", "type": "Park/Recreation", "rating": 4.5, "distance_miles": 0.8, "address": "Highbury Crescent, London"}
+            ]
+        }
+    elif "anfield" in stadium_lower:
+        return {
+            "restaurants": [
+                {"name": "The Albert Pub", "type": "Pub/Restaurant", "rating": 4.6, "distance_miles": 0.1, "address": "185 Walton Breck Rd, Liverpool"},
+                {"name": "Homebaked Anfield", "type": "Community Bakery", "rating": 4.9, "distance_miles": 0.2, "address": "197 Oakfield Rd, Liverpool"},
+                {"name": "Sandon Pub", "type": "Pub/Bistro", "rating": 4.5, "distance_miles": 0.4, "address": "178-182 Oakfield Rd, Liverpool"}
+            ],
+            "convenience_stores": [
+                {"name": "Anfield Convenience Store", "type": "Local Grocer", "rating": 4.0, "distance_miles": 0.3, "address": "Walton Breck Rd, Liverpool"},
+                {"name": "Sainsbury's Local Walton", "type": "Grocery Store", "rating": 4.2, "distance_miles": 0.8, "address": "Walton Rd, Liverpool"}
+            ],
+            "pharmacies": [
+                {"name": "Anfield Health Pharmacy", "type": "Pharmacy", "rating": 4.4, "distance_miles": 0.3, "address": "Priory Rd, Liverpool"},
+                {"name": "Co-op Pharmacy Liverpool", "type": "Pharmacy", "rating": 4.2, "distance_miles": 0.6, "address": "Walton Breck Rd, Liverpool"}
+            ],
+            "tourist_spots": [
+                {"name": "LFC Museum & Stadium Tour", "type": "Museum/Attraction", "rating": 4.8, "distance_miles": 0.1, "address": "Anfield Stadium, Liverpool"},
+                {"name": "Stanley Park & Isla Gladstone", "type": "Park/Recreation", "rating": 4.6, "distance_miles": 0.3, "address": "Anfield Rd, Liverpool"}
+            ]
+        }
+    elif "bernabeu" in stadium_lower or "bernabéu" in stadium_lower:
+        return {
+            "restaurants": [
+                {"name": "Asador Donostiarra", "type": "Steakhouse", "rating": 4.7, "distance_miles": 0.6, "address": "Calle de la Infanta Mercedes 79, Madrid"},
+                {"name": "El Bar de la Esquina", "type": "Tapas Bar", "rating": 4.4, "distance_miles": 0.2, "address": "Calle de Concha Espina, Madrid"},
+                {"name": "Real Cafe Bernabeu", "type": "Cafe/Restaurant", "rating": 4.5, "distance_miles": 0.1, "address": "Santiago Bernabéu Stadium, Madrid"}
+            ],
+            "convenience_stores": [
+                {"name": "Carrefour Express Castellana", "type": "Supermarket", "rating": 4.3, "distance_miles": 0.3, "address": "Paseo de la Castellana, Madrid"},
+                {"name": "SuperCor Concha Espina", "type": "Grocery Store", "rating": 4.2, "distance_miles": 0.4, "address": "Avenida de Concha Espina, Madrid"}
+            ],
+            "pharmacies": [
+                {"name": "Farmacia Bernabeu 24h", "type": "Pharmacy", "rating": 4.6, "distance_miles": 0.2, "address": "Paseo de la Castellana 150, Madrid"},
+                {"name": "Farmacia Castellana", "type": "Pharmacy", "rating": 4.3, "distance_miles": 0.5, "address": "Calle de San Germán, Madrid"}
+            ],
+            "tourist_spots": [
+                {"name": "Tour Bernabéu & Real Madrid Trophy Room", "type": "Museum/Attraction", "rating": 4.9, "distance_miles": 0.1, "address": "Santiago Bernabéu Stadium, Madrid"},
+                {"name": "Plaza de Lima", "type": "Public Plaza", "rating": 4.3, "distance_miles": 0.2, "address": "Paseo de la Castellana, Madrid"}
+            ]
+        }
+    else:
+        return {
+            "restaurants": [
+                {"name": f"{stadium} Sports Bar & Grill", "type": "Sports Diner", "rating": 4.3, "distance_miles": 0.4, "address": f"Near {stadium}"},
+                {"name": "The Pitchside Pub", "type": "Gastropub", "rating": 4.5, "distance_miles": 0.3, "address": f"Opposite {stadium}"}
+            ],
+            "convenience_stores": [
+                {"name": "Matchday Express Corner Shop", "type": "Convenience Store", "rating": 4.1, "distance_miles": 0.4, "address": "Stadium Approach Rd"}
+            ],
+            "pharmacies": [
+                {"name": "Stadium Gates Chemist", "type": "Pharmacy", "rating": 4.2, "distance_miles": 0.5, "address": "High St"}
+            ],
+            "tourist_spots": [
+                {"name": f"{stadium} Stadium Gates & Fan Wall", "type": "Attraction", "rating": 4.6, "distance_miles": 0.1, "address": stadium}
+            ]
+        }
+
+def get_fallback_image(acc_type: str, seed_id: int) -> str:
+    hotel_images = [
+        "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=600&q=80",
+        "https://images.unsplash.com/photo-1540541338287-41700207dee6?auto=format&fit=crop&w=600&q=80",
+        "https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?auto=format&fit=crop&w=600&q=80"
+    ]
+    hostel_images = [
+        "https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=600&q=80",
+        "https://images.unsplash.com/photo-1626125345510-4603468eedfb?auto=format&fit=crop&w=600&q=80"
+    ]
+    airbnb_images = [
+        "https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=600&q=80",
+        "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=600&q=80",
+        "https://images.unsplash.com/photo-1493809842364-78817add7ffb?auto=format&fit=crop&w=600&q=80"
+    ]
+    shared_images = [
+        "https://images.unsplash.com/photo-1505691938895-1758d7feb511?auto=format&fit=crop&w=600&q=80",
+        "https://images.unsplash.com/photo-1595526114035-0d45ed16cfbf?auto=format&fit=crop&w=600&q=80"
+    ]
+
+    if acc_type == "hotel":
+        return hotel_images[seed_id % len(hotel_images)]
+    elif acc_type == "hostel":
+        return hostel_images[seed_id % len(hostel_images)]
+    elif acc_type == "shared_room":
+        return shared_images[seed_id % len(shared_images)]
+    else:
+        return airbnb_images[seed_id % len(airbnb_images)]
 
 class ServicesMCPServer:
     def __init__(self) -> None:
@@ -586,12 +834,12 @@ class ServicesMCPServer:
                 {"name": "Chamartín Shared Dorms", "type": "shared_room", "price_usd": 28, "rating": 4.1, "distance_miles": 1.1, "amenities": ["WiFi", "Lockers"]}
             ]
         }
-        
+
         # Backward compatibility fallback for hostels
         self.hostels = {
             k: [h for h in v if h["type"] == "hostel"] for k, v in self.stays.items()
         }
-        
+
         self.routes = {
             "transit": [
                 {"mode": "Metro", "duration_minutes": 22, "cost_usd": 2.50, "steps": "Walk 3m to Station -> Line 4 North (5 stops) -> Walk 2m to Gate A"},
@@ -602,7 +850,7 @@ class ServicesMCPServer:
                 {"mode": "Walking Corridor", "duration_minutes": 55, "cost_usd": 0.00, "steps": "Follow Fan Walkway East -> Enter Stadium Pedestrian Ring"}
             ]
         }
- 
+
         self.reviews = {
             "emirates stadium": [
                 {"establishment": "The Tollington Arms", "type": "Pub", "rating": 4.7, "review": "Unmatched pre-match atmosphere. Filled with fans singing, great selection of local beers."},
@@ -693,7 +941,7 @@ class ServicesMCPServer:
             sort_by = arguments.get("sort_by", "price").lower()
             check_in = arguments.get("check_in")
             check_out = arguments.get("check_out")
-            
+
             # Convert max_price to float or None
             try:
                 if max_price is not None:
@@ -726,10 +974,10 @@ class ServicesMCPServer:
                 sys.stderr.write(f"Error querying Airbnb: {e}\n")
                 sys.stderr.flush()
 
-            # 3. Query other providers (Hotelbeds/LiteAPI or Mock DB)
+            # 3. Query configured lodging providers only.
             hbx_api_key = os.environ.get("HBX_API_KEY")
             liteapi_key = os.environ.get("LITEAPI_KEY")
-            
+
             other_stays = []
             if hbx_api_key or liteapi_key:
                 hbx_results = []
@@ -745,38 +993,25 @@ class ServicesMCPServer:
                     except Exception:
                         pass
                 other_stays = merge_stays(hbx_results, lite_results)
-            else:
-                stadium_lower = stadium.strip().lower()
-                matched_key = next((k for k in self.stays if k in stadium_lower or stadium_lower in k), None)
-                if not matched_key:
-                    fallback_stays = [
-                        {"name": f"{stadium} Grand Hotel", "type": "hotel", "price_usd": 130, "rating": 4.7, "distance_miles": 0.5, "amenities": ["WiFi", "AC", "Gym"], "provider": "Mock DB"},
-                        {"name": f"{stadium} Backpackers", "type": "hostel", "price_usd": 35, "rating": 4.1, "distance_miles": 0.9, "amenities": ["WiFi", "Bar"], "provider": "Mock DB"},
-                        {"name": f"Cozy Room near {stadium}", "type": "airbnb", "price_usd": 65, "rating": 4.4, "distance_miles": 0.7, "amenities": ["WiFi", "Kitchen"], "provider": "Mock DB"},
-                        {"name": "Budget Shared Bunk", "type": "shared_room", "price_usd": 22, "rating": 3.8, "distance_miles": 1.4, "amenities": ["WiFi"], "provider": "Mock DB"}
-                    ]
-                    other_stays = fallback_stays
-                else:
-                    other_stays = [dict(s, provider="Mock DB") for s in self.stays[matched_key]]
 
             # Combine airbnb and other stays (filter out mock airbnb if we have live airbnb data)
             if airbnb_stays:
                 other_stays = [s for s in other_stays if s["type"] != "airbnb"]
-                
+
             results = airbnb_stays + other_stays
 
             # 4. Filter by accommodation type
             if accommodation_type != "all":
                 results = [s for s in results if s["type"] == accommodation_type]
-                
+
             # Filter by max price
             if max_price is not None:
                 results = [s for s in results if s["price_usd"] <= max_price]
-                
+
             # Filter by rating
             if min_rating is not None:
                 results = [s for s in results if s["rating"] >= min_rating]
-                
+
             # Filter by required amenities
             if required_amenities:
                 req_lower = [a.lower() for a in required_amenities]
@@ -786,59 +1021,69 @@ class ServicesMCPServer:
                     if all(a in amenities_lower for a in req_lower):
                         filtered.append(s)
                 results = filtered
-                
+
             # Sort results
             if sort_by == "rating":
                 results = sorted(results, key=lambda x: x.get("rating", 0.0), reverse=True)
             else:
                 results = sorted(results, key=lambda x: x.get("price_usd", 0.0))
-            
+
             return {
                 "status": "success",
                 "stadium": stadium,
                 "accommodation_type": accommodation_type,
-                "stays": results
+                "stays": results,
+                "warnings": [] if results else ["No configured lodging provider returned stays for this stadium."]
             }
 
         elif tool_name == "search_hostels":
             stadium = arguments.get("stadium", "").strip().lower()
             max_price = arguments.get("max_price")
-            
-            # Match key containing the text
+
+            # Match key containing the text from configured provider data only.
             matched_key = next((k for k in self.hostels if k in stadium or stadium in k), None)
             if not matched_key:
-                # Fallback mock items
-                fallback_hostels = [
-                    {"name": f"{arguments.get('stadium')} Fan Stay", "price_usd": 42, "rating": 4.4, "distance_miles": 0.8, "amenities": ["WiFi"]},
-                    {"name": "Standard Backpacker Dorms", "price_usd": 28, "rating": 3.9, "distance_miles": 1.5, "amenities": ["WiFi", "Bunks"]}
-                ]
-                results = fallback_hostels
+                results = []
             else:
                 results = self.hostels[matched_key]
-                
+
             if max_price is not None:
                 results = [h for h in results if h["price_usd"] <= max_price]
-                
-            return {"status": "success", "stadium": arguments.get("stadium"), "hostels": results}
+
+            return {
+                "status": "success",
+                "stadium": arguments.get("stadium"),
+                "hostels": results,
+                "warnings": [] if results else ["No configured hostel provider returned hostels for this stadium."]
+            }
 
         elif tool_name == "get_directions":
             origin = arguments.get("origin")
             destination = arguments.get("destination")
             mode = arguments.get("mode", "transit")
-            
-            options = self.routes.get("transit") if mode != "walking" else self.routes.get("walking")
+
+            routes = fetch_google_directions(origin, destination, mode)
+            recs = fetch_google_nearby_recommendations(destination)
+            warnings = []
+            if not routes:
+                warnings.append("No configured directions provider returned routes.")
+            if not recs:
+                warnings.append("No configured nearby places provider returned recommendations.")
+
             return {
                 "status": "success",
                 "origin": origin,
                 "destination": destination,
                 "preferred_mode": mode,
-                "routes": options
+                "routes": routes,
+                "recommendations": recs,
+                "warnings": warnings
             }
 
         elif tool_name == "get_food_reviews":
             venue = arguments.get("venue", "").strip().lower()
             matched_key = next((k for k in self.reviews if k in venue or venue in k), None)
-            
+
             if not matched_key:
                 fallback_reviews = [
                     {"establishment": "Local Sports Diner", "type": "Restaurant", "rating": 4.2, "review": "Great burgers and screens, gets busy on matchdays."},
@@ -847,7 +1092,7 @@ class ServicesMCPServer:
                 results = fallback_reviews
             else:
                 results = self.reviews[matched_key]
-                
+
             return {"status": "success", "venue": arguments.get("venue"), "reviews": results}
 
         elif tool_name == "get_team_matches":
@@ -925,7 +1170,7 @@ class ServicesMCPServer:
                             "message": f"Method not found: {method}"
                         }
                     }
-                
+
                 sys.stdout.write(json.dumps(response) + "\n")
                 sys.stdout.flush()
             except Exception as exc:

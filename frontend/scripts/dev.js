@@ -70,6 +70,7 @@ const next = spawn("npx", ["next", "dev"], {
   shell: true,
   env: {
     ...process.env,
+    NODE_ENV: "development",
     NEXT_TELEMETRY_DISABLED: "1",
     NODE_PATH: "./node_modules",
   },

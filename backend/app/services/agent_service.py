@@ -6,6 +6,75 @@ from typing import Dict, Any, List
 from app.db.vector_search import vector_search_manager
 from app.api.auth import MOCK_USERS_DB
 
+SAFETY_KNOWLEDGE_BASE: List[Dict[str, Any]] = [
+    {
+        "id": "generic-matchday-crowds",
+        "title": "Matchday crowd safety baseline",
+        "sourceType": "RAG fallback",
+        "scope": "All stadium trips",
+        "city": "",
+        "stadium": "",
+        "tags": ["crowds", "stadium", "matchday", "egress", "safety"],
+        "excerpt": "Use official fan corridors, avoid unmanaged shortcuts after full time, keep valuables secured in dense queues, and leave extra time for entry checks.",
+        "url": "internal://safety/matchday-crowds",
+    },
+    {
+        "id": "generic-transit-safety",
+        "title": "Transit and late-night travel baseline",
+        "sourceType": "RAG fallback",
+        "scope": "All destination cities",
+        "city": "",
+        "stadium": "",
+        "tags": ["transit", "late-night", "route", "taxi", "walking"],
+        "excerpt": "Prefer well-lit routes, licensed taxis, official rideshare pickup areas, and staffed transit stations when travelling late at night.",
+        "url": "internal://safety/transit-baseline",
+    },
+    {
+        "id": "manchester-etihad",
+        "title": "Manchester stadium district guidance",
+        "sourceType": "RAG fallback",
+        "scope": "Manchester / Etihad Stadium",
+        "city": "Manchester",
+        "stadium": "Etihad Stadium",
+        "tags": ["manchester", "etihad", "tram", "crowds", "uk"],
+        "excerpt": "Around Etihad Stadium, use signed walking routes and Metrolink or official taxi zones. Expect crowding at tram stops immediately after full time.",
+        "url": "internal://safety/manchester-etihad",
+    },
+    {
+        "id": "london-stadiums",
+        "title": "London football travel safety guidance",
+        "sourceType": "RAG fallback",
+        "scope": "London stadium districts",
+        "city": "London",
+        "stadium": "",
+        "tags": ["london", "tube", "stadium", "crowds", "uk"],
+        "excerpt": "For London stadium trips, use TfL routes where possible, follow stewarded exits, and keep extra interchange time for busy Tube stations.",
+        "url": "internal://safety/london-stadiums",
+    },
+    {
+        "id": "madrid-stadiums",
+        "title": "Madrid stadium district guidance",
+        "sourceType": "RAG fallback",
+        "scope": "Madrid stadium districts",
+        "city": "Madrid",
+        "stadium": "",
+        "tags": ["madrid", "metro", "bernabeu", "metropolitano", "spain"],
+        "excerpt": "For Madrid matchdays, Metro connections are usually the safest final-mile option. Avoid isolated side streets after late fixtures.",
+        "url": "internal://safety/madrid-stadiums",
+    },
+    {
+        "id": "milan-san-siro",
+        "title": "Milan San Siro travel guidance",
+        "sourceType": "RAG fallback",
+        "scope": "Milan / San Siro",
+        "city": "Milan",
+        "stadium": "San Siro",
+        "tags": ["milan", "san siro", "metro", "italy"],
+        "excerpt": "For San Siro, use Metro Line M5 and allow time for post-match crowd control around station entrances.",
+        "url": "internal://safety/milan-san-siro",
+    },
+]
+
 # Try imports for Vertex AI
 try:
     import vertexai
@@ -24,11 +93,11 @@ except ImportError:
 class AgentService:
     def __init__(self) -> None:
         self.system_instruction = ""
-        
+
         # Load system instructions dynamically from root agent specs
         root_dir = Path(__file__).resolve().parents[3]
         instruction_path = root_dir / "agents" / "globus-2026" / "system-instruction.md"
-        
+
         try:
             if instruction_path.exists():
                 with instruction_path.open("r", encoding="utf-8") as f:
@@ -47,7 +116,7 @@ class AgentService:
         if HAS_GENAI and api_key:
             try:
                 genai.configure(api_key=api_key)
-                self.llm_model = genai.GenerativeModel("gemini-1.5-pro")
+                self.llm_model = genai.GenerativeModel("gemini-2.0-flash")
                 self.genai_initialized = True
             except Exception:
                 pass
@@ -56,7 +125,7 @@ class AgentService:
         if not self.genai_initialized and HAS_VERTEX_AI and gcp_project:
             try:
                 vertexai.init(project=gcp_project, location=os.getenv("GCP_LOCATION", "us-central1"))
-                self.llm_model = GenerativeModel("gemini-1.5-pro")
+                self.llm_model = GenerativeModel("gemini-2.0-flash")
                 self.vertex_initialized = True
             except Exception:
                 pass
@@ -64,7 +133,7 @@ class AgentService:
     async def get_user_profile(self, email: str) -> Dict[str, Any]:
         """Fetch user profile from MongoDB or mock DB fallback"""
         normalized_email = email.strip().lower()
-        
+
         if vector_search_manager.db is not None:
             try:
                 users_col = vector_search_manager.db["users"]
@@ -81,7 +150,7 @@ class AgentService:
                     }
             except Exception:
                 pass
-                
+
         # Mock DB fallback
         if normalized_email in MOCK_USERS_DB:
             user = MOCK_USERS_DB[normalized_email]
@@ -94,7 +163,7 @@ class AgentService:
                 "stadium": user.get("stadium", ""),
                 "street": user.get("street", "")
             }
-            
+
         return {
             "name": "Guest Fan",
             "followed_teams": ["Arsenal"],
@@ -105,6 +174,102 @@ class AgentService:
             "street": "Highbury Hill"
         }
 
+    def _score_safety_source(self, source: Dict[str, Any], terms: List[str], city: str, stadium: str) -> float:
+        text = " ".join([
+            str(source.get("title", "")),
+            str(source.get("scope", "")),
+            str(source.get("city", "")),
+            str(source.get("stadium", "")),
+            " ".join(source.get("tags", [])),
+            str(source.get("excerpt", "")),
+        ]).lower()
+        score = 0.0
+        city_l = city.lower()
+        stadium_l = stadium.lower()
+
+        if city_l and city_l in text:
+            score += 5.0
+        if stadium_l and stadium_l in text:
+            score += 6.0
+        for term in terms:
+            if term and term in text:
+                score += 1.0
+        if not source.get("city") and not source.get("stadium"):
+            score += 0.5
+        return score
+
+    async def _retrieve_safety_context(self, city: str, stadium: str, match_date: str) -> List[Dict[str, Any]]:
+        """
+        Safety RAG retrieval.
+        In production this can read embedded official advisories. Locally it uses
+        Mongo safety_sources if present, then falls back to curated safety notes.
+        """
+        query = f"{city} {stadium} {match_date} matchday safety transit emergency route crowd stadium"
+        terms = [t for t in re.split(r"\W+", query.lower()) if len(t) > 2]
+        candidates: List[Dict[str, Any]] = []
+
+        if vector_search_manager.db is not None:
+            try:
+                collection = vector_search_manager.db["safety_sources"]
+                regex_terms = [city, stadium, "matchday", "transit", "emergency"]
+                regex_terms = [re.escape(t) for t in regex_terms if t]
+                if regex_terms:
+                    pattern = "|".join(regex_terms)
+                    cursor = collection.find(
+                        {
+                            "$or": [
+                                {"city": {"$regex": pattern, "$options": "i"}},
+                                {"stadium": {"$regex": pattern, "$options": "i"}},
+                                {"title": {"$regex": pattern, "$options": "i"}},
+                                {"content": {"$regex": pattern, "$options": "i"}},
+                                {"tags": {"$regex": pattern, "$options": "i"}},
+                            ]
+                        },
+                        {"_id": 0, "embedding": 0},
+                    ).limit(8)
+                    mongo_docs = await cursor.to_list(length=8)
+                    for doc in mongo_docs:
+                        candidates.append({
+                            "id": doc.get("id") or doc.get("slug") or doc.get("title", "safety-source"),
+                            "title": doc.get("title", "Safety source"),
+                            "sourceType": doc.get("sourceType", "RAG document"),
+                            "scope": doc.get("scope") or f"{doc.get('city', city)} / {doc.get('stadium', stadium)}",
+                            "city": doc.get("city", ""),
+                            "stadium": doc.get("stadium", ""),
+                            "tags": doc.get("tags", []),
+                            "excerpt": doc.get("excerpt") or doc.get("content", "")[:240],
+                            "url": doc.get("url", ""),
+                        })
+            except Exception as exc:
+                print(f"Safety RAG retrieval failed, using fallback notes: {exc}")
+
+        candidates.extend(SAFETY_KNOWLEDGE_BASE)
+        scored = sorted(
+            ((self._score_safety_source(src, terms, city, stadium), src) for src in candidates),
+            key=lambda item: item[0],
+            reverse=True,
+        )
+
+        selected: List[Dict[str, Any]] = []
+        seen = set()
+        for score, src in scored:
+            src_id = src.get("id") or src.get("title")
+            if src_id in seen or score <= 0:
+                continue
+            seen.add(src_id)
+            selected.append({
+                "id": src_id,
+                "title": src.get("title", "Safety source"),
+                "sourceType": src.get("sourceType", "RAG fallback"),
+                "scope": src.get("scope", ""),
+                "excerpt": src.get("excerpt", ""),
+                "url": src.get("url", ""),
+                "score": round(score, 2),
+            })
+            if len(selected) >= 4:
+                break
+        return selected
+
     async def run_chat(self, email: str, query: str) -> Dict[str, Any]:
         """
         Simulate the LangGraph orchestration node workflow:
@@ -114,10 +279,10 @@ class AgentService:
         """
         profile = await self.get_user_profile(email)
         query_lower = query.lower()
-        
+
         tool_calls_made = []
         action_details = []
-        
+
         # Extract target stadium from query if mentioned, else fallback to profile
         if "emirates" in query_lower:
             target_stadium = "Emirates Stadium"
@@ -127,12 +292,12 @@ class AgentService:
             target_stadium = "Santiago Bernabéu"
         else:
             target_stadium = profile.get("stadium") or "Emirates Stadium"
-            
+
         user_city = profile.get("city") or "London"
-        
+
         from app.mcp.stay_mcp_client import StayMCPClient
         client = StayMCPClient()
-        
+
         try:
             await client.connect()
         except Exception as exc:
@@ -141,7 +306,7 @@ class AgentService:
                 "profile": profile,
                 "tool_calls": []
             }
-            
+
         try:
             # 1. Check if query is about Hostels/Hotels/Accommodation/Airbnb/Staying
             if any(w in query_lower for w in ["hostel", "hotel", "stay", "accommodation", "room", "airbnb", "lodging"]):
@@ -154,19 +319,19 @@ class AgentService:
                     types_to_include.append("shared_room")
                 if "airbnb" in query_lower or "apartment" in query_lower:
                     types_to_include.append("airbnb")
-                    
+
                 if len(types_to_include) == 1:
                     acc_type = types_to_include[0]
                 else:
                     acc_type = "all"
-                    
+
                 max_price = None
                 price_match = re.search(r'(?:under|below|max|budget)?\s*\$?\s*(\d+)\s*(?:usd|dollars)?', query_lower)
                 if price_match:
                     extracted = int(price_match.group(1))
                     if extracted < 1000:  # Avoid matching years
                         max_price = extracted
-                
+
                 min_rating = None
                 rating_match = re.search(r'(?:rating|stars?)\s*(?:above|over|of|at least|>=|>)?\s*([0-9.]+)', query_lower)
                 if rating_match:
@@ -174,11 +339,11 @@ class AgentService:
                         min_rating = float(rating_match.group(1))
                     except ValueError:
                         pass
-                
+
                 sort_by = "price"
                 if "rating" in query_lower:
                     sort_by = "rating"
-                
+
                 req_amenities = []
                 if "wifi" in query_lower:
                     req_amenities.append("WiFi")
@@ -194,7 +359,7 @@ class AgentService:
                     req_amenities.append("Gym")
                 if "bar" in query_lower:
                     req_amenities.append("Bar")
-                    
+
                 arguments = {
                     "stadium": target_stadium,
                     "accommodation_type": acc_type
@@ -207,19 +372,19 @@ class AgentService:
                     arguments["required_amenities"] = req_amenities
                 if sort_by != "price":
                     arguments["sort_by"] = sort_by
-                    
+
                 tool_calls_made.append({
                     "name": "search_stays",
                     "arguments": arguments
                 })
                 res = await client.call_tool("search_stays", arguments)
-                
+
                 # Post-filter if multiple specific types were requested but tool had to query "all"
                 if len(types_to_include) > 1 and res.get("status") == "success" and "stays" in res:
                     res["stays"] = [s for s in res["stays"] if s["type"] in types_to_include]
-                    
+
                 action_details.append(res)
-                
+
             # 2. Check if query is about Directions/Route/Travel
             if any(w in query_lower for w in ["directions", "route", "travel", "metro", "cab", "walk", "get to"]):
                 dir_args = {"origin": user_city, "destination": target_stadium, "mode": "transit"}
@@ -229,7 +394,7 @@ class AgentService:
                 })
                 res = await client.call_tool("get_directions", dir_args)
                 action_details.append(res)
-                
+
             # 3. Check if query is about Reviews/Food/Drinks
             if any(w in query_lower for w in ["food", "drink", "pub", "restaurant", "review", "pie"]):
                 rev_args = {"venue": target_stadium}
@@ -239,7 +404,7 @@ class AgentService:
                 })
                 res = await client.call_tool("get_food_reviews", rev_args)
                 action_details.append(res)
-                
+
             # 4. Check if query is about Match/Schedule/Fixtures
             if any(w in query_lower for w in ["match", "fixture", "schedule", "game", "upcoming"]):
                 target_team = profile.get("followed_teams")[0] if profile.get("followed_teams") else "Arsenal"
@@ -255,11 +420,534 @@ class AgentService:
 
         # Synthesize markdown response utilizing the official Globus 2026 layout template
         markdown_reply = self._synthesize_response(query, profile, tool_calls_made, action_details)
-        
+
         return {
             "reply": markdown_reply,
             "profile": profile,
             "tool_calls": tool_calls_made
+        }
+
+    async def run_planning(self, email: str, prompt: str) -> Dict[str, Any]:
+        """
+        AI-guided logistics planning based on a natural language prompt (e.g. budget).
+        Steps:
+        1. Intent & Entity Extraction: Ask Gemini to extract destination, dates, budget, etc.
+        2. Convert to Constraints: Formulate constraints based on the extracted entities.
+        3. Retrieval: Call schedules search, stays search, and routes search tools.
+        4. Candidate Scoring & Multi-objective Optimization: Rank hotels/stays by price fit, rating, and distance.
+        5. Decision & Validation: Select primary stay, backup option, and check budget limits.
+        6. Premium Itinerary Synthesis: Call Gemini to summarize the logistics briefing.
+        """
+        profile = await self.get_user_profile(email)
+        prompt_lower = prompt.lower()
+        user_city = profile.get("city") or "London"
+
+        # --- Step 1: Intent & Entity Extraction (LLM Slot Filling) ---
+        entities = {}
+        if self.llm_model:
+            extraction_prompt = f"""
+            You are an expert logistics coordinator and information extraction assistant.
+            Extract the following entities from the user's travel planning prompt.
+            Return ONLY a valid JSON object. Do not include any markdown styling like ```json or any other text.
+
+            Fields to extract:
+            - destination_city (string or null, e.g. "Madrid", "London", "Delhi")
+            - dates (list of strings or null)
+            - budget_limit (float or null, representing maximum USD. If budget is in other currencies like INR, convert to USD. E.g. 8k INR is ~100 USD. If €150, convert to ~160 USD)
+            - stadium (string or null, e.g. "Emirates Stadium", "Santiago Bernabéu", "Anfield", "Etihad Stadium")
+            - travel_mode (string, default to "transit")
+            - hotel_preferences (list of strings, e.g. ["WiFi", "Pool", "Gym", "Breakfast"])
+            - teams (list of strings, e.g. ["Real Madrid", "Arsenal", "Liverpool"])
+            - max_distance (float or null, representing maximum miles from stadium)
+
+            User Prompt: "{prompt}"
+            JSON Response:
+            """
+            try:
+                response = self.llm_model.generate_content(extraction_prompt)
+                clean_text = response.text.strip()
+                clean_text = re.sub(r"^```json\s*", "", clean_text)
+                clean_text = re.sub(r"\s*```$", "", clean_text)
+                entities = json.loads(clean_text)
+            except Exception as e:
+                # Fallback to empty if LLM fails
+                entities = {}
+
+        # --- Step 2: Convert to Constraints ---
+        # Parse fallback values if LLM did not extract them
+        budget_limit = entities.get("budget_limit")
+        if budget_limit is None:
+            # Fallback regex for budget
+            budget_match = re.search(r'(?:under|below|max|budget)?\s*\$?\s*(\d+)\s*(?:usd|dollars)?', prompt_lower)
+            if budget_match:
+                budget_limit = float(budget_match.group(1))
+            else:
+                budget_limit = 150.0 # Default budget
+
+        max_dist = entities.get("max_distance") or 5.0
+        hotel_prefs = entities.get("hotel_preferences") or []
+        preferred_mode = entities.get("travel_mode") or "transit"
+        dest_city = entities.get("destination_city") or user_city
+        teams_filter = entities.get("teams") or []
+
+        # --- Step 3: Retrieve Candidate Options (API/Tool Call) ---
+        # 3.1 Match retrieval & Stadium constraint geocoding
+        matches = await vector_search_manager.get_all_schedules()
+        selected_match = None
+        compromised_match = False
+
+        # Try matching followed teams
+        followed = profile.get("followed_teams", [])
+        if followed:
+            for m in matches:
+                home = m.get("home_team", "").lower()
+                away = m.get("away_team", "").lower()
+                if any(t.lower() in home or t.lower() in away for t in followed):
+                    selected_match = m
+                    break
+
+        # Try matching prompt/extracted teams
+        if not selected_match and (teams_filter or entities.get("stadium") or entities.get("destination_city")):
+            stadium_query = (entities.get("stadium") or "").lower()
+            city_query = (entities.get("destination_city") or "").lower()
+            for m in matches:
+                home = m.get("home_team", "").lower()
+                away = m.get("away_team", "").lower()
+                venue = m.get("venue", "").lower()
+                city = m.get("city", "").lower()
+                if any(t.lower() in home or t.lower() in away for t in teams_filter):
+                    selected_match = m
+                    break
+                if stadium_query and stadium_query in venue:
+                    selected_match = m
+                    break
+                if city_query and city_query in city:
+                    selected_match = m
+                    break
+
+        # Fallback compromise match
+        if not selected_match and matches:
+            selected_match = matches[0]
+            compromised_match = True
+
+        if not selected_match:
+            raise ValueError("No matches available for planning.")
+
+        match_name = f"{selected_match.get('home_team')} vs {selected_match.get('away_team')}"
+        match_date = selected_match.get("date", "")
+        stadium = selected_match.get("venue", "Emirates Stadium")
+        match_city = selected_match.get("city") or "London"
+
+        # 3.2 Stays & Directions Tool Call
+        from app.mcp.stay_mcp_client import StayMCPClient
+        client = StayMCPClient()
+        try:
+            await client.connect()
+        except Exception as exc:
+            import traceback
+            traceback.print_exc()
+            raise RuntimeError(f"Could not connect to logistics MCP service: {exc}")
+
+        stays_list = []
+        routes = []
+        recommendations = {}
+        data_warnings = []
+
+        try:
+            # Search stays candidate list
+            stay_res = await client.call_tool("search_stays", {"stadium": stadium, "accommodation_type": "all"})
+            stays_list = stay_res.get("stays", [])
+            data_warnings.extend(stay_res.get("warnings", []))
+
+            # Fetch routes
+            dir_res = await client.call_tool("get_directions", {
+                "origin": dest_city,
+                "destination": stadium,
+                "mode": preferred_mode
+            })
+            routes = dir_res.get("routes", [])
+            recommendations = dir_res.get("recommendations", {})
+            data_warnings.extend(dir_res.get("warnings", []))
+        finally:
+            await client.disconnect()
+
+        origin_city = profile.get("city") or "London"
+        dest_city = match_city
+        if not stays_list:
+            data_warnings.append("Stay search returned no hotel/hostel results. Check Hotelbeds/LiteAPI/Airbnb provider configuration.")
+        if not routes:
+            data_warnings.append("Route service returned no flight/train/road options. Connect a transit, rail, flight, or maps provider for live route preferences.")
+
+        safety_sources = await self._retrieve_safety_context(dest_city, stadium, match_date)
+        safety_context = "\n".join(
+            f"- {src['title']} ({src['scope']}): {src['excerpt']}"
+            for src in safety_sources
+        )
+
+        # Generate city safety briefing using RAG-grounded context plus Gemini if available
+        safety_briefing = {
+            "level": "Low Risk",
+            "score": 8.8,
+            "summary": f"Standard precautions are recommended in {dest_city}. This is an estimated, RAG-grounded safety status based on retrieved stadium, city, and transit guidance.",
+            "emergencyNumbers": {
+                "Emergency": "999" if dest_city.lower() in ["london", "manchester", "liverpool"] else "112",
+                "Non-Emergency": "101" if dest_city.lower() in ["london", "manchester", "liverpool"] else "110"
+            },
+            "tips": [
+                "Keep personal belongings secure in crowded areas and transit hubs.",
+                "Stick to well-lit routes and official fan walkways when leaving the stadium.",
+                "Use licensed taxis or official ride-sharing apps for late-night travel."
+            ]
+        }
+
+        if self.llm_model:
+            safety_prompt = f"""
+            You are a World Cup security and safety coordinator.
+            Generate a safety briefing for travellers visiting the city of {dest_city}.
+            Use ONLY the retrieved safety context below for grounding. Do not claim live police,
+            weather, protest, incident, or emergency-feed status unless it is explicitly present.
+            Label the status as an estimate when live feeds are not available.
+
+            Retrieved safety context:
+            {safety_context}
+
+            Provide the risk level (e.g., "Low Risk", "Moderate Caution", "High Vigilance"), a safety score out of 10, a concise summary for match day around {stadium}, emergency phone numbers, and 3 specific safety tips for match-goers.
+
+            Return ONLY a valid JSON object. Do not include any markdown formatting like ```json or other text.
+            Schema:
+            {{
+                "level": "Low Risk" | "Moderate Caution" | "High Vigilance",
+                "score": float (0.0 to 10.0),
+                "summary": "string",
+                "emergencyNumbers": {{
+                    "Emergency": "string",
+                    "Non-Emergency": "string"
+                }},
+                "tips": ["string", "string", "string"]
+            }}
+            """
+            try:
+                response = self.llm_model.generate_content(safety_prompt)
+                clean_text = response.text.strip()
+                clean_text = re.sub(r"^```json\s*", "", clean_text)
+                clean_text = re.sub(r"\s*```$", "", clean_text)
+                safety_briefing = json.loads(clean_text)
+            except Exception as e:
+                print(f"Failed to generate safety briefing: {e}")
+
+        safety_briefing["sourceType"] = "rag_grounded_estimate"
+        safety_briefing["sourceLabel"] = "Estimated + RAG Grounded"
+        safety_briefing["liveStatus"] = False
+        safety_briefing["sourcesUsed"] = safety_sources
+
+        # --- Step 4: Candidate Scoring & Multi-Objective Optimization ---
+        scored_stays = []
+        for s in stays_list:
+            price = float(s.get("price_usd", 999.0))
+            rating = float(s.get("rating", 0.0))
+            distance = float(s.get("distance_miles", 99.0))
+            amenities = s.get("amenities", [])
+
+            # 1. Price Score: stays must leave room for ticket ($50) and transit ($5).
+            # Ideal lodging price is budget_limit - 55.
+            ideal_limit = max(20.0, budget_limit - 55.0)
+            if price > budget_limit:
+                price_score = -500.0  # Violates budget constraint
+            elif price > ideal_limit:
+                # Tight fit
+                price_score = (1.0 - (price - ideal_limit) / (budget_limit - ideal_limit)) * 20.0
+            else:
+                # Well within budget
+                price_score = 40.0 + (1.0 - (price / ideal_limit)) * 10.0
+
+            # 2. Rating Score (scaled to 30)
+            rating_score = (rating / 5.0) * 30.0
+
+            # 3. Distance Score (scaled to 15)
+            if distance > max_dist:
+                distance_score = -200.0  # Violates distance constraints
+            else:
+                distance_score = (1.0 - (distance / max_dist)) * 15.0
+
+            # 4. Amenities Match (scaled to 5)
+            amenity_matches = 0
+            if hotel_prefs:
+                for pref in hotel_prefs:
+                    if any(pref.lower() in am.lower() for am in amenities):
+                        amenity_matches += 1
+                amenity_score = (amenity_matches / len(hotel_prefs)) * 5.0
+            else:
+                amenity_score = 5.0
+
+            total_score = price_score + rating_score + distance_score + amenity_score
+            scored_stays.append((total_score, s))
+
+        # Sort by score descending
+        scored_stays = sorted(scored_stays, key=lambda x: x[0], reverse=True)
+
+        selected_stay = None
+        backup_stay = None
+        compromised_stay = False
+
+        if scored_stays:
+            best_score, selected_stay = scored_stays[0]
+            if best_score < 0:
+                # All candidates violated budget/distance. Compromise: pick cheapest.
+                selected_stay = sorted(stays_list, key=lambda x: x.get("price_usd", 999.0))[0]
+                compromised_stay = True
+
+            # Select backup lodging
+            if len(scored_stays) > 1:
+                _, backup_stay = scored_stays[1]
+            else:
+                backup_stay = selected_stay
+        else:
+            selected_stay = None
+            backup_stay = None
+            compromised_stay = True
+
+        stay_options = []
+        for score, stay in scored_stays[:6]:
+            option = dict(stay)
+            option["selection_score"] = round(score, 2)
+            option["why"] = (
+                "Strong fit across budget, rating, distance, and requested amenities."
+                if score >= 0
+                else "Fallback option that misses at least one constraint."
+            )
+            stay_options.append(option)
+        stay_name = selected_stay.get("name") if selected_stay else None
+        route_options = []
+        for route in routes:
+            enriched_route = dict(route)
+            steps = str(enriched_route.get("steps") or "")
+            legs = []
+            for idx, segment in enumerate([part.strip() for part in steps.split("->") if part.strip()]):
+                legs.append({
+                    "label": f"Leg {idx + 1}",
+                    "detail": segment,
+                    "duration_minutes": None,
+                    "cost_usd": None,
+                })
+            enriched_route["legs"] = legs
+            enriched_route["connects_to"] = stay_name
+            enriched_route["best_for"] = "Fetched route option from the directions provider."
+            route_options.append(enriched_route)
+        routes = route_options
+
+        # --- Step 5: Decide, Validate and Assemble Plan ---
+        stay_price = float(selected_stay.get("price_usd", 0.0)) if selected_stay else 0.0
+        selected_route = routes[0] if routes else None
+        transit_cost = float(selected_route.get("cost_usd", 0.0) or 0.0) if selected_route else 0.0
+        ticket_cost = 50.0
+        total_cost = stay_price + transit_cost + ticket_cost
+        is_within_budget = total_cost <= budget_limit
+        status_text = "Within Budget" if is_within_budget else "Over Budget (Compromised)"
+        selected_stay_reason = (
+            "Selected as the strongest available fit across price, rating, stadium distance, and requested amenities."
+            if selected_stay and not compromised_stay
+            else "No stay was selected because the stay provider returned no valid hotel/hostel result."
+        )
+        selected_route_reason = (
+            "Selected as the first route returned by the directions provider."
+            if selected_route
+            else "No route was selected because the route provider returned no valid flight/train/road option."
+        )
+        validation_checks = [
+            {
+                "label": "Budget",
+                "status": "pass" if is_within_budget else "warning",
+                "detail": f"Estimated total ${total_cost:.2f} against target budget ${budget_limit:.2f}.",
+            },
+            {
+                "label": "Stay distance",
+                "status": "pass" if selected_stay and float(selected_stay.get("distance_miles", 99.0)) <= max_dist else "warning",
+                "detail": f"{selected_stay.get('distance_miles')} miles from {stadium}; requested max is {max_dist} miles." if selected_stay else "Stay distance could not be validated because no stay data was returned.",
+            },
+            {
+                "label": "Route feasibility",
+                "status": "pass" if selected_route and selected_route.get("steps") else "warning",
+                "detail": f"{selected_route.get('mode')} route includes {selected_route.get('duration_minutes')} minutes of planned travel." if selected_route else "Route feasibility could not be validated because no route data was returned.",
+            },
+            {
+                "label": "Safety grounding",
+                "status": "pass" if safety_sources else "warning",
+                "detail": f"{len(safety_sources)} retrieved safety source(s); live incident feeds are not configured.",
+            },
+        ]
+        planning_stages = [
+            {
+                "id": "understand",
+                "label": "Understand request",
+                "brief": f"Extracted destination {dest_city}, budget ${budget_limit:.2f}, preferred mode {preferred_mode}, and max stay distance {max_dist} miles.",
+                "details": [
+                    f"Destination city: {dest_city}",
+                    f"Budget limit: ${budget_limit:.2f}",
+                    f"Travel mode: {preferred_mode}",
+                ],
+            },
+            {
+                "id": "match",
+                "label": "Find match",
+                "brief": f"Selected {match_name} at {stadium} on {match_date}.",
+                "details": [
+                    f"Match: {match_name}",
+                    f"Venue: {stadium}",
+                    f"Date: {match_date or 'TBD'}",
+                ],
+            },
+            {
+                "id": "stay",
+                "label": "Find stay",
+                "brief": f"Selected {selected_stay.get('name')} at ${stay_price:.2f}/night, {selected_stay.get('distance_miles')} miles from the stadium." if selected_stay else "Stay provider returned no hotel/hostel result.",
+                "details": [
+                    f"Type: {selected_stay.get('type')}" if selected_stay else "Type: unavailable",
+                    f"Rating: {selected_stay.get('rating')}/5" if selected_stay else "Rating: unavailable",
+                    f"Reason: {selected_stay_reason}",
+                ],
+            },
+            {
+                "id": "route",
+                "label": "Find route / flight",
+                "brief": f"Selected {selected_route.get('mode')} taking {selected_route.get('duration_minutes')} minutes for about ${float(selected_route.get('cost_usd', 0.0)):.2f}." if selected_route else "Route provider returned no flight/train/road option.",
+                "details": [
+                    f"Origin: {origin_city}",
+                    f"Destination: {dest_city} / {stadium}",
+                    f"Route: {selected_route.get('steps')}" if selected_route else "Route: unavailable",
+                ],
+            },
+            {
+                "id": "validate",
+                "label": "Validate and brief",
+                "brief": f"Validation finished with budget status: {status_text}. Safety is {safety_briefing.get('sourceLabel')}.",
+                "details": [
+                    f"Fare total: ${total_cost:.2f}",
+                    f"Safety level: {safety_briefing.get('level')}",
+                    f"Sources retrieved: {len(safety_sources)}",
+                ],
+            },
+        ]
+
+        # --- Step 6: Itinerary Synthesis (LLM summary / response synthesis) ---
+        summary_text = ""
+        if self.llm_model:
+            best_route = selected_route or {"mode": "Unavailable", "duration_minutes": "Unavailable", "cost_usd": 0.0, "steps": "Route provider returned no usable route."}
+            stay_summary = selected_stay or {"name": "Unavailable", "type": "Unavailable", "price_usd": 0.0, "rating": "Unavailable", "distance_miles": "Unavailable", "amenities": []}
+            backup_summary = backup_stay or {"name": "Unavailable", "price_usd": 0.0, "rating": "Unavailable"}
+
+            itinerary_prompt = f"""
+            You are Globus 2026, the premium autonomous World Cup logistics coordinator.
+            Construct a highly polished, professional, and visually premium logistics briefing and itinerary for the user based on the planned choices below.
+
+            Do NOT include markdown block wrappers like ```markdown. Output raw markdown directly.
+
+            --- LOGISTICS CONSTRAINTS & DETAILS ---
+            User Target Budget: ${budget_limit:.2f} USD
+            Chosen Match: {match_name} on {match_date} at {stadium}
+
+            PRIMARY SELECTED LODGING:
+            - Name: {stay_summary.get('name')}
+            - Type: {stay_summary.get('type')}
+            - Price: ${stay_price:.2f}/night
+            - Rating: {stay_summary.get('rating')}/5
+            - Distance to Stadium: {stay_summary.get('distance_miles')} miles
+            - Amenities: {", ".join(stay_summary.get('amenities', []))}
+
+            BACKUP LODGING OPTION:
+            - Name: {backup_summary.get('name')} (Price: ${float(backup_summary.get('price_usd', 0.0)):.2f}/night, Rating: {backup_summary.get('rating', 0.0)}/5)
+
+            TRANSIT ROUTE:
+            - Mode: {best_route.get('mode')} (Duration: {best_route.get('duration_minutes')} mins, Cost: ${best_route.get('cost_usd', 0.0):.2f})
+            - Steps: {best_route.get('steps')}
+
+            ESTIMATED TOTAL FARE BREAKDOWN:
+            - Lodging: ${stay_price:.2f}
+            - Transit: ${transit_cost:.2f}
+            - Match Ticket: ${ticket_cost:.2f}
+            - Grand Total: ${total_cost:.2f}
+            - Budget Status: {status_text}
+
+            RECOMMENDED PLACES (NEAR STADIUM):
+            - Food & Pubs: {recommendations.get('restaurants', [])}
+            - Convenience: {recommendations.get('convenience_stores', [])}
+            - Pharmacies: {recommendations.get('pharmacies', [])}
+            - Tourist Spots: {recommendations.get('tourist_spots', [])}
+            - Data warnings: {data_warnings}
+
+            Provide a premium logistics dispatch matching the Globus 2026 theme:
+            - Start with a clear Title: "### ✨ Globus 2026 AI Agent Journey Plan"
+            - Use bullet points or a short table for match and lodging selections.
+            - Summarize the fare breakdown.
+            - Include transit routing options and transfer advisory notes (e.g. mention transfer points, walking corridors).
+            - Add operations tips (risks, mitigations, transfer advisories, break points).
+            - Output should be crisp, professional, and visually structured.
+            """
+            try:
+                response = self.llm_model.generate_content(itinerary_prompt)
+                summary_text = response.text.strip()
+            except Exception as e:
+                print(f"Gemini itinerary generation failed: {e}")
+                summary_text = ""
+
+        # Fallback heuristic summary text if Gemini failed or was not initialized
+        if not summary_text:
+            match_status = "matches your followed teams" if not compromised_match else "selected as the best upcoming option (compromised)"
+            summary_bullets = [
+                f"🎯 **Match Selection**: We selected **{match_name}** on **{match_date}** at **{stadium}**. This {match_status}.",
+            ]
+            if selected_stay:
+                stay_status = "chosen from provider results under the active planning constraints" if not compromised_stay else "returned by the provider but outside at least one requested constraint"
+                summary_bullets.append(
+                    f"🏨 **Lodging Choice**: We selected **{selected_stay.get('name')}** ({selected_stay.get('type')}) at **${stay_price}/night** (Rating: {selected_stay.get('rating')}/5, Distance: {selected_stay.get('distance_miles')} miles). This was {stay_status}."
+                )
+            else:
+                summary_bullets.append("🏨 **Lodging Choice**: No hotel/hostel data was returned by the stay provider.")
+
+            if selected_route:
+                best_route = selected_route
+                summary_bullets.append(
+                    f"🚇 **Transit routing**: Best route is via **{best_route.get('mode')}** taking **{best_route.get('duration_minutes')} minutes** (Est Cost: ${best_route.get('cost_usd'):.2f})."
+                )
+                if "steps" in best_route:
+                    summary_bullets.append(f"   *Route details*: {best_route['steps']}")
+            else:
+                summary_bullets.append("🚇 **Transit routing**: No flight/train/road route was returned by the directions provider.")
+
+            summary_bullets.append(
+                f"💸 **Total Fare Summary**: Stay: **${stay_price:.2f}** | Transit: **${transit_cost:.2f}** | Est. Ticket: **${ticket_cost:.2f}** | **Grand Total: ${total_cost:.2f}** (Target Budget: ${budget_limit:.2f})."
+            )
+            if data_warnings:
+                summary_bullets.append("⚠️ **Data Warnings**: " + " ".join(data_warnings))
+            summary_text = "### ✨ Globus 2026 AI Agent Journey Plan\n\n" + "\n".join(summary_bullets)
+
+        return {
+            "status": "success",
+            "matchName": match_name,
+            "matchDate": match_date,
+            "stadium": stadium,
+            "selectedStay": selected_stay,
+            "selectedStayReason": selected_stay_reason,
+            "backupStay": backup_stay,
+            "stayOptions": stay_options,
+            "selectedRoute": selected_route,
+            "selectedRouteReason": selected_route_reason,
+            "routes": routes,
+            "routeOptions": routes,
+            "recommendations": recommendations,
+            "safetyBriefing": safety_briefing,
+            "safetySources": safety_sources,
+            "validationChecks": validation_checks,
+            "planningStages": planning_stages,
+            "dataWarnings": data_warnings,
+            "totalFare": {
+                "stay": float(stay_price),
+                "transit": float(transit_cost),
+                "ticket": ticket_cost,
+                "total": total_cost,
+                "budget": float(budget_limit),
+                "status": status_text
+            },
+            "summary": summary_text
         }
 
     def _synthesize_response(self, query: str, profile: Dict[str, Any], tools: List[Dict], details: List[Dict]) -> str:
@@ -280,16 +968,16 @@ I am ready to assist you with operations details:
         sections = []
         sections.append(f"### Globus 2026 Logistics Dispatch")
         sections.append(f"**Objective**: Resolve user logistics query: *\"{query}\"*")
-        
+
         current_sit = f"User **{profile.get('name')}** is located in **{profile.get('city')}** following **{', '.join(profile.get('followed_teams', []))}**. Favorite stadium is **{profile.get('stadium')}**."
         sections.append(f"**Current Situation**: {current_sit}")
-        
+
         # Extract data
         stays_data = next((d for d in details if "stays" in d), None)
         route_data = next((d for d in details if "routes" in d), None)
         review_data = next((d for d in details if "reviews" in d), None)
         match_data = next((d for d in details if "fixtures" in d), None)
-        
+
         plan_bullets = []
         if stays_data:
             plan_bullets.append(f"#### 🏨 Staying Places Comparison (Near {stays_data.get('stadium')})")
@@ -297,7 +985,7 @@ I am ready to assist you with operations details:
             plan_bullets.append("")
             plan_bullets.append("| Accommodation Name | Type | Price/Night | Rating | Distance to Stadium | Amenities |")
             plan_bullets.append("| :--- | :---: | :---: | :---: | :---: | :--- |")
-            
+
             for s in stays_data["stays"]:
                 type_badge = s["type"].upper().replace("_", " ")
                 amenities_str = ", ".join(s["amenities"])
@@ -305,12 +993,12 @@ I am ready to assist you with operations details:
                     f"| **{s['name']}** | `{type_badge}` | **${s['price_usd']}** | {s['rating']}/5 | {s['distance_miles']} miles | {amenities_str} |"
                 )
             plan_bullets.append("")
-                
+
         if route_data:
             plan_bullets.append("#### 🚇 Route Service Navigation Options")
             for r in route_data["routes"]:
                 plan_bullets.append(f"- **{r['mode']}**: takes **{r['duration_minutes']} mins** (Est Cost: ${r['cost_usd']:.2f}). Route: *{r['steps']}*")
-                
+
         if review_data:
             plan_bullets.append("#### 🍔 Review Service Recommendations")
             for rev in review_data["reviews"]:
@@ -322,7 +1010,7 @@ I am ready to assist you with operations details:
                 plan_bullets.append(f"- **vs {f['opponent']}** ({f['competition']}): Kickoff *{f['date']}* - Played **{f['location']}**")
 
         sections.append("**Recommended Plan**:\n" + "\n".join(plan_bullets))
-        
+
         sections.append(f"""**Key Constraints**:
 - Destination: {profile.get('stadium')}
 - Transit limits: Transit cost efficiency & timing.

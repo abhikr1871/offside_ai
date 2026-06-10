@@ -7,7 +7,7 @@ export interface StoredUser {
 
 const USERS_KEY = "offside_users";
 const CURRENT_USER_KEY = "offside_current_user_email";
-const BACKEND_URL = "http://localhost:8080";
+export const BACKEND_URL = "http://localhost:8080";
 
 export function getStoredUsers(): StoredUser[] {
   if (typeof window === "undefined") return [];
@@ -89,4 +89,21 @@ export function logoutUser() {
 export function getFavoriteTeamsKey() {
   const user = getCurrentUser();
   return user ? `followed_teams:${user.email}` : "followed_teams:guest";
+}
+
+/**
+ * Fetches the user's profile from the backend and returns whether they
+ * have completed onboarding. Returns true (skip onboarding) on network error
+ * to avoid blocking users unnecessarily.
+ */
+export async function checkUserOnboarded(email: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/v1/auth/profile?email=${encodeURIComponent(email)}`);
+    if (!res.ok) return false;
+    const data = await res.json();
+    return data.onboarded === true;
+  } catch {
+    // If backend is unreachable, assume onboarded to avoid blocking login
+    return true;
+  }
 }

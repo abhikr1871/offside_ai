@@ -1,6 +1,16 @@
 import os
+import sys
+import asyncio
 import logging
 from dotenv import load_dotenv
+
+# ── Windows: asyncio subprocess fix ───────────────────────────────────────────
+# On Windows, uvicorn defaults to SelectorEventLoop which does NOT support
+# asyncio.create_subprocess_exec.  Switching to ProactorEventLoop fixes the
+# "NotImplementedError" raised by StayMCPClient.connect().
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+# ──────────────────────────────────────────────────────────────────────────────
 
 # Load local environment variables from .env file
 load_dotenv()

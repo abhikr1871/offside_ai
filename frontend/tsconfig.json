@@ -22,20 +22,26 @@
         "name": "next"
       }
     ],
+    "baseUrl": ".",
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "next": [
+        "./node_modules/next"
+      ],
+      "next/*": [
+        "./node_modules/next/*"
       ]
     }
   },
   "include": [
     "**/*.ts",
     "**/*.tsx",
-    "../../../../.next-offside-ai/types/**/*.ts",
-    "../../../../AppData/Local/Temp/.next-offside-ai/types/**/*.ts",
     ".next/types/**/*.ts",
+    ".next_local/types/**/*.ts",
     "next-env.d.ts",
-    "../../../../AppData/Local/offside-ai-next/types/**/*.ts"
+    "../../../../AppData/Local/offside-ai-next-sandbox/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

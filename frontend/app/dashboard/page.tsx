@@ -60,6 +60,13 @@ interface ChatMessage {
   toolCalls?: Array<{ name: string; arguments: Record<string, unknown> }>;
 }
 
+interface AIPlanningStage {
+  id: string;
+  label: string;
+  brief: string;
+  details?: string[];
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const BACKEND = "http://localhost:8080";
@@ -94,6 +101,14 @@ const MCP_SERVICES = [
   { id: "route",  name: "Route Service",  tool: "get_directions(origin, destination, mode)", desc: "Calculate transit, taxi, and walking routes to any stadium." },
   { id: "review", name: "Review Service", tool: "get_food_reviews(venue)", desc: "Pre-match pub ratings and food stall recommendations." },
   { id: "match",  name: "Match Service",  tool: "get_team_matches(team_name)", desc: "Upcoming fixtures and competition schedule for followed clubs." },
+];
+
+const DEFAULT_AI_PLANNING_STAGES: AIPlanningStage[] = [
+  { id: "understand", label: "Understand request", brief: "Extracting city, dates, budget, team, stadium, stay, and route constraints." },
+  { id: "match", label: "Find match", brief: "Searching the schedule and selecting the strongest matching fixture." },
+  { id: "stay", label: "Find stay", brief: "Ranking hotels, hostels, shared rooms, and airbnbs by price, rating, and distance." },
+  { id: "route", label: "Find route / flight", brief: "Building flight, train, transit, taxi, and walking route options." },
+  { id: "validate", label: "Validate and brief", brief: "Checking budget, route feasibility, safety grounding, and final fare." },
 ];
 
 type TabId = "dashboard" | "journey" | "tickets" | "assistant" | "analysis" | "contact" | "settings";
@@ -265,7 +280,7 @@ export default function DashboardPage() {
   const [journeyLoading, setJourneyLoading] = useState<boolean>(false);
   const [journeyError, setJourneyError] = useState<string | null>(null);
   const [journeySelectedStay, setJourneySelectedStay] = useState<any | null>(null);
-  
+
   // Custom check-in/out dates override
   const [journeyCheckIn, setJourneyCheckIn] = useState<string>("");
   const [journeyCheckOut, setJourneyCheckOut] = useState<string>("");
@@ -280,6 +295,28 @@ export default function DashboardPage() {
   const [journeyRoutes, setJourneyRoutes] = useState<any[]>([]);
   const [journeyRouteLoading, setJourneyRouteLoading] = useState<boolean>(false);
   const [journeyRouteError, setJourneyRouteError] = useState<string | null>(null);
+
+  // Journey AI & Explore states
+  const [journeyAILoading, setJourneyAILoading] = useState<boolean>(false);
+  const [loadingLogs, setLoadingLogs] = useState<string[]>([]);
+  const [currentLogMsg, setCurrentLogMsg] = useState<string>("");
+  const [aiPlanningStages, setAiPlanningStages] = useState<AIPlanningStage[]>(DEFAULT_AI_PLANNING_STAGES);
+  const [activeAIStageIndex, setActiveAIStageIndex] = useState<number>(0);
+  const [completedAIStageCount, setCompletedAIStageCount] = useState<number>(0);
+  const [selectedRouteIdx, setSelectedRouteIdx] = useState<number>(0);
+  const [journeySelectedRoute, setJourneySelectedRoute] = useState<any | null>(null);
+  const [journeySafetyBriefing, setJourneySafetyBriefing] = useState<any | null>(null);
+  const [activePlacesTab, setActivePlacesTab] = useState<string>("restaurants");
+  const [journeyRecommendations, setJourneyRecommendations] = useState<any | null>(null);
+  const [journeyTotalFare, setJourneyTotalFare] = useState<any | null>(null);
+  const [journeySummary, setJourneySummary] = useState<string>("");
+  const [journeySelectedStayReason, setJourneySelectedStayReason] = useState<string>("");
+  const [journeySelectedRouteReason, setJourneySelectedRouteReason] = useState<string>("");
+  const [journeySafetySources, setJourneySafetySources] = useState<any[]>([]);
+  const [journeyValidationChecks, setJourneyValidationChecks] = useState<any[]>([]);
+  const [journeyDataWarnings, setJourneyDataWarnings] = useState<string[]>([]);
+  const [showStayOptions, setShowStayOptions] = useState<boolean>(false);
+  const [showRouteOptions, setShowRouteOptions] = useState<boolean>(false);
 
   // ── Fetch followed matches ───────────────────────────────────────────────
   const fetchFollowedMatches = useCallback(async (userEmail: string) => {
@@ -317,7 +354,7 @@ export default function DashboardPage() {
     // Load profile
     fetch(`${BACKEND}/api/v1/auth/profile?email=${encodeURIComponent(user.email)}`)
       .then(r => r.ok ? r.json() : null)
-      .then(data => { 
+      .then(data => {
         if (data) {
           setUserProfile(data);
           const addressParts = [];
@@ -363,7 +400,7 @@ export default function DashboardPage() {
     setJourneyMatchName(`${match.homeTeam} vs ${match.awayTeam}`);
     setJourneyMatchDate(matchDateStr);
     setJourneyStadium(match.venue || "Emirates Stadium");
-    
+
     if (matchDateStr) {
       setJourneyCheckIn(matchDateStr);
       const dt = new Date(matchDateStr);
@@ -373,7 +410,7 @@ export default function DashboardPage() {
       setJourneyCheckIn("");
       setJourneyCheckOut("");
     }
-    
+
     setJourneyStep(2);
     setActiveTab("journey");
   };
@@ -383,7 +420,7 @@ export default function DashboardPage() {
     setJourneyMatchName(`${ticket.home_team} vs ${ticket.away_team}`);
     setJourneyMatchDate(matchDateStr);
     setJourneyStadium(ticket.venue || "Emirates Stadium");
-    
+
     if (matchDateStr) {
       setJourneyCheckIn(matchDateStr);
       const dt = new Date(matchDateStr);
@@ -393,7 +430,7 @@ export default function DashboardPage() {
       setJourneyCheckIn("");
       setJourneyCheckOut("");
     }
-    
+
     setJourneyStep(2);
     setActiveTab("journey");
   };
@@ -466,6 +503,74 @@ export default function DashboardPage() {
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       }]);
     } finally { setSending(false); }
+  };
+
+  const handleAIPlan = async () => {
+    if (!aiPrompt.trim() || !email || journeyAILoading) return;
+    setJourneyAILoading(true);
+    setJourneyError(null);
+    setLoadingLogs([]);
+    setAiPlanningStages(DEFAULT_AI_PLANNING_STAGES);
+    setActiveAIStageIndex(0);
+    setCompletedAIStageCount(0);
+    setCurrentLogMsg("Initializing Globus 2026 AI planner...");
+    const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+    try {
+      const res = await fetch(`${BACKEND}/api/v1/agent/plan`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, prompt: aiPrompt }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status === "success") {
+          const resultStages: AIPlanningStage[] = data.planningStages?.length ? data.planningStages : DEFAULT_AI_PLANNING_STAGES;
+          setAiPlanningStages(resultStages);
+          setJourneyMatchName(data.matchName || "");
+          setJourneyMatchDate(data.matchDate || "");
+          setJourneyStadium(data.stadium || "");
+          setJourneySelectedStay(data.selectedStay || null);
+          setJourneySelectedStayReason(data.selectedStayReason || "");
+          setJourneySelectedRoute(data.selectedRoute || data.routes?.[0] || null);
+          setJourneySelectedRouteReason(data.selectedRouteReason || "");
+          setJourneyStays(data.stayOptions || data.stays || (data.selectedStay ? [data.selectedStay] : []));
+          setJourneyRoutes(data.routeOptions || data.routes || []);
+          setJourneySafetyBriefing(data.safetyBriefing || null);
+          setJourneySafetySources(data.safetySources || data.safetyBriefing?.sourcesUsed || []);
+          setJourneyValidationChecks(data.validationChecks || []);
+          setJourneyDataWarnings(data.dataWarnings || []);
+          setJourneyRecommendations(data.recommendations || null);
+          setJourneyTotalFare(data.totalFare || null);
+          setJourneySummary(data.summary || "");
+          setSelectedRouteIdx(0);
+          setShowStayOptions(true);
+          setShowRouteOptions(true);
+          setActivePlacesTab("restaurants");
+
+          for (let idx = 0; idx < resultStages.length; idx++) {
+            setActiveAIStageIndex(idx);
+            setCompletedAIStageCount(idx);
+            setCurrentLogMsg(resultStages[idx].brief || resultStages[idx].label);
+            setLoadingLogs(prev => [...prev, resultStages[idx].brief || resultStages[idx].label]);
+            await wait(900);
+            setCompletedAIStageCount(idx + 1);
+            await wait(350);
+          }
+          setCurrentLogMsg("Plan ready.");
+          await wait(450);
+          setJourneyStep(5);
+        } else {
+          setJourneyError(data.detail || "Failed to generate AI plan. Please refine your prompt constraints.");
+        }
+      } else {
+        setJourneyError("Error connecting to Globus AI planning engine.");
+      }
+    } catch (err) {
+      setJourneyError("Could not reach AI planning engine backend.");
+    } finally {
+      setJourneyAILoading(false);
+    }
   };
 
   // ── Tab Content Renderers ──────────────────────────────────────────────────
@@ -562,8 +667,8 @@ export default function DashboardPage() {
               const isBooked = bookedMatchIds.has(match.id);
               const isBooking = bookingInProgress === match.id;
               return (
-                <div 
-                  key={match.id} 
+                <div
+                  key={match.id}
                   className={`glass-card match-card ${isBooked ? "cursor-pointer hover:border-emerald-500/40" : ""}`}
                   onClick={() => {
                     if (isBooked) {
@@ -577,7 +682,7 @@ export default function DashboardPage() {
                       {statusLabel(match.status)}
                     </span>
                   </div>
- 
+
                    <div className="match-teams-row">
                     <div className="match-team">
                       {match.homeCrest ? (
@@ -590,7 +695,7 @@ export default function DashboardPage() {
                       )}
                       <span className="match-team-name">{match.homeTeam}</span>
                     </div>
- 
+
                      <div className="match-vs-block">
                       {["IN_PLAY", "PAUSED", "FINISHED", "FT"].includes((match.status || "").toUpperCase()) ? (
                         <span className="match-score">{match.homeScore} – {match.awayScore}</span>
@@ -601,7 +706,7 @@ export default function DashboardPage() {
                         <span className="match-time">{match.minute}&apos;</span>
                       )}
                     </div>
- 
+
                      <div className="match-team">
                       {match.awayCrest ? (
                         /* eslint-disable-next-line @next/next/no-img-element */
@@ -614,13 +719,13 @@ export default function DashboardPage() {
                       <span className="match-team-name">{match.awayTeam}</span>
                     </div>
                   </div>
- 
+
                    {match.eventDate && (
                     <div className="text-center text-[11px] text-zinc-500 font-mono -mt-1">
                       {formatMatchDate(match.eventDate)}
                     </div>
                   )}
- 
+
                    <div className="match-card-footer">
                     <span className="match-venue-text">{match.venue || "—"}</span>
                     {isBooked ? (
@@ -866,7 +971,7 @@ export default function DashboardPage() {
           dt.setDate(dt.getDate() + 1);
           checkOut = dt.toISOString().split("T")[0];
         }
-        
+
         const res = await fetch(
           `${BACKEND}/api/v1/logistics/stays?stadium=${encodeURIComponent(journeyStadium)}&max_price=${journeyMaxPrice}&required_amenities=${encodeURIComponent(amenitiesParam)}&accommodation_type=${journeyAccommodationType}&check_in=${checkIn}&check_out=${checkOut}`
         );
@@ -902,6 +1007,8 @@ export default function DashboardPage() {
           const data = await res.json();
           if (data.status === "success" && data.routes) {
             setJourneyRoutes(data.routes);
+            setJourneySelectedRoute(data.routes[0] || null);
+            setSelectedRouteIdx(0);
           } else {
             setJourneyRouteError("Failed to calculate route steps. Please verify your origin.");
           }
@@ -953,8 +1060,139 @@ export default function DashboardPage() {
       }
     };
 
+    const renderAIPlannerOverlay = () => (
+      <div className="absolute inset-0 bg-zinc-950/90 backdrop-blur-md rounded-2xl flex flex-col items-center justify-center p-4 md:p-6 z-50">
+        <div className="w-full max-w-3xl bg-zinc-900/95 border border-violet-500/30 rounded-2xl p-5 shadow-2xl space-y-5">
+          <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-red-500/80" />
+              <span className="w-2.5 h-2.5 rounded-full bg-yellow-500/80" />
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
+            </div>
+            <div className="text-[10px] font-mono text-violet-400 uppercase tracking-widest font-extrabold">
+              Globus 2026 AI Planner
+            </div>
+            <div className="text-[9px] font-mono text-zinc-500">
+              5 STAGE EXECUTION
+            </div>
+          </div>
+
+          <div className="grid gap-3">
+            {aiPlanningStages.map((stage, idx) => {
+              const isActive = idx === activeAIStageIndex;
+              const isDone = idx < completedAIStageCount;
+              const showDetails = isActive || isDone;
+              return (
+                <div
+                  key={stage.id}
+                  className={`rounded-xl border p-3 text-left transition-all duration-300 ${
+                    isActive
+                      ? "border-violet-500/60 bg-violet-500/[0.06] shadow-[0_0_20px_rgba(139,92,246,0.08)]"
+                      : isDone
+                      ? "border-emerald-500/30 bg-emerald-500/[0.03]"
+                      : "border-zinc-800 bg-zinc-950/40"
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-[10px] font-mono font-black ${
+                      isDone
+                        ? "border-emerald-500 bg-emerald-500 text-zinc-950"
+                        : isActive
+                        ? "border-violet-400 text-violet-300"
+                        : "border-zinc-700 text-zinc-500"
+                    }`}>
+                      {isDone ? "OK" : idx + 1}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-3">
+                        <h4 className={`text-xs font-black uppercase tracking-wider ${isActive ? "text-violet-300" : isDone ? "text-emerald-400" : "text-zinc-500"}`}>
+                          {stage.label}
+                        </h4>
+                        {isActive && (
+                          <span className="h-4 w-4 shrink-0 rounded-full border-2 border-violet-500/20 border-t-violet-400 animate-spin" />
+                        )}
+                      </div>
+                      <p className="mt-1 text-[11px] leading-relaxed text-zinc-400">
+                        {showDetails ? stage.brief : "Queued for execution."}
+                      </p>
+                      {showDetails && stage.details && stage.details.length > 0 && (
+                        <div className="mt-2 grid gap-1">
+                          {stage.details.slice(0, 3).map((detail, dIdx) => (
+                            <div key={dIdx} className="rounded-lg border border-zinc-800/70 bg-black/20 px-2.5 py-1.5 text-[10px] text-zinc-300 font-mono">
+                              {detail}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="rounded-xl border border-zinc-800 bg-black/30 p-3">
+            <div className="flex gap-2 text-left text-violet-300 font-mono text-[10px] font-extrabold">
+              <span className="text-violet-500 animate-blink">|</span>
+              <span>{currentLogMsg}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+
     return (
-      <div className="glass-card p-6 max-w-4xl mx-auto space-y-6">
+      <div className="glass-card p-8 w-full max-w-none space-y-8 relative overflow-hidden">
+        {journeyAILoading && renderAIPlannerOverlay()}
+        {/* Waiting / Loading Screen Terminal Overlay */}
+        {false && journeyAILoading && (
+          <div className="absolute inset-0 bg-zinc-950/85 backdrop-blur-md rounded-2xl flex flex-col items-center justify-center p-6 z-50">
+            <div className="w-full max-w-md bg-zinc-900/90 border border-violet-500/30 rounded-2xl p-5 shadow-2xl space-y-4">
+              {/* Terminal Header */}
+              <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-red-500/80" />
+                  <span className="w-2.5 h-2.5 rounded-full bg-yellow-500/80" />
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
+                </div>
+                <div className="text-[10px] font-mono text-violet-400 uppercase tracking-widest font-extrabold animate-pulse">
+                  Globus 2026 AI Planner
+                </div>
+                <div className="text-[9px] font-mono text-zinc-550">
+                  SECURE_TLS_V1.3
+                </div>
+              </div>
+
+              {/* Loading Radar */}
+              <div className="flex justify-center py-4">
+                <div className="relative w-16 h-16 flex items-center justify-center">
+                  <div className="absolute inset-0 rounded-full border-2 border-violet-500/10" />
+                  <div className="absolute inset-0 rounded-full border-2 border-t-violet-500 border-r-transparent animate-spin" />
+                  <div className="text-xl">✨</div>
+                </div>
+              </div>
+
+              {/* Terminal body */}
+              <div className="bg-black/40 rounded-xl p-4 border border-zinc-850 h-44 overflow-y-auto font-mono text-[10px] text-zinc-400 space-y-1.5 scrollbar-thin text-left">
+                {loadingLogs.map((log, lIdx) => (
+                  <div key={lIdx} className="flex gap-2 text-left animate-slide-up text-zinc-400">
+                    <span className="text-violet-500">▶</span>
+                    <span>{log}</span>
+                  </div>
+                ))}
+                <div className="flex gap-2 text-left text-violet-400 font-extrabold">
+                  <span className="text-violet-500 animate-blink">▋</span>
+                  <span>{currentLogMsg}</span>
+                </div>
+              </div>
+
+              <p className="text-[10px] text-center text-zinc-550 font-mono">
+                Optimizing flights, stays, routes and matchday event locations
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Wizard Header / Steps Indicator */}
         <div className="border-b border-zinc-700/50 pb-5">
           <div className="flex items-center justify-between">
@@ -975,14 +1213,15 @@ export default function DashboardPage() {
               </button>
             )}
           </div>
-          
+
           {/* Progress bar HUD */}
-          <div className="mt-5 grid grid-cols-4 gap-2 text-center text-[10px] font-mono tracking-wider">
+          <div className="mt-5 grid grid-cols-5 gap-2 text-center text-[10px] font-mono tracking-wider">
             {[
               "1. MATCH DETAILS",
               "2. STAY FILTERS",
               "3. LODGING LIST",
-              "4. ROUTE DIRECTIONS"
+              "4. ROUTE DIRECTIONS",
+              "5. EXPLORE & SAFETY"
             ].map((stepLabel, idx) => {
               const active = journeyStep === idx + 1;
               const completed = journeyStep > idx + 1;
@@ -1330,10 +1569,7 @@ export default function DashboardPage() {
                     disabled={!aiPrompt.trim()}
                     className="book-ticket-btn"
                     style={aiPrompt.trim() ? { background: 'linear-gradient(135deg, #7c3aed, #8b5cf6)', borderColor: 'rgba(139,92,246,0.5)' } : {}}
-                    onClick={() => {
-                      /* AI planning handler — coming soon */
-                      alert("AI Planning coming soon! Prompt: " + aiPrompt);
-                    }}
+                    onClick={handleAIPlan}
                   >
                     ✨ Let AI Plan My Journey →
                   </button>
@@ -1349,7 +1585,7 @@ export default function DashboardPage() {
         {journeyStep === 2 && (
           <div className="space-y-6 py-2">
             <div className="section-label">Configure Stay Parameters for {journeyStadium}</div>
-            
+
             <div className="grid gap-6 sm:grid-cols-2">
               <div className="space-y-2">
                 <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider">
@@ -1559,11 +1795,11 @@ export default function DashboardPage() {
             return (
               <div className="flex items-center gap-0.5 text-orange-500">
                 {Array.from({ length: 5 }).map((_, i) => (
-                  <svg 
-                    key={i} 
-                    xmlns="http://www.w3.org/2000/svg" 
-                    viewBox="0 0 24 24" 
-                    fill="currentColor" 
+                  <svg
+                    key={i}
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
                     className="h-3.5 w-3.5"
                   >
                     <path fillRule="evenodd" d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.006 5.404.434c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.434 2.082-5.005Z" clipRule="evenodd" />
@@ -1597,21 +1833,21 @@ export default function DashboardPage() {
               return 1;
             }
           };
-          
+
           const nights = getNightsCount();
 
           return (
             <div className="space-y-6 py-2">
               {/* Mockup Hotel Deals Hero Banner */}
               <div className="relative rounded-2xl overflow-hidden min-h-[220px] flex flex-col justify-end p-6 border border-zinc-700/30 shadow-2xl bg-zinc-950">
-                <div 
+                <div
                   className="absolute inset-0 bg-cover bg-center opacity-40 select-none pointer-events-none"
                   style={{
                     backgroundImage: "url('https://images.unsplash.com/photo-1506012787146-f92b2d7d6d96?auto=format&fit=crop&w=1200&q=80')"
                   }}
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/45 to-transparent pointer-events-none" />
-                
+
                 <div className="relative z-10 space-y-1 text-left">
                   <h3 className="text-xl md:text-2xl font-black text-white uppercase tracking-tight">
                     Incredible hotel deals
@@ -1658,7 +1894,7 @@ export default function DashboardPage() {
                     Recommended hotels
                   </h4>
                   <div className="flex items-center gap-1.5">
-                    <button 
+                    <button
                       type="button"
                       className="p-1 rounded-full border border-zinc-800 bg-zinc-900/40 text-zinc-400 hover:text-white hover:border-zinc-700 transition-all cursor-pointer"
                       title="Previous"
@@ -1667,7 +1903,7 @@ export default function DashboardPage() {
                         <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
                       </svg>
                     </button>
-                    <button 
+                    <button
                       type="button"
                       className="p-1 rounded-full border border-zinc-800 bg-zinc-900/40 text-zinc-400 hover:text-white hover:border-zinc-700 transition-all cursor-pointer"
                       title="Next"
@@ -1688,30 +1924,35 @@ export default function DashboardPage() {
                   <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                     {journeyStays.map((s, idx) => {
                       const isSelected = journeySelectedStay?.name === s.name;
-                      const stayImg = getStayImage(s.type, s.name, idx);
                       const reviewStatus = getReviewBadgeText(s.rating);
                       const reviewCount = getReviewCount(s.name, s.rating);
                       return (
-                        <div 
-                          key={idx} 
+                        <div
+                          key={idx}
                           className={`flex flex-col rounded-2xl border bg-zinc-950/20 backdrop-blur-md shadow-lg overflow-hidden transition-all duration-300 hover:scale-[1.01] hover:shadow-xl ${
                             isSelected ? "border-emerald-500/80 shadow-emerald-500/5 bg-emerald-500/[0.01]" : "border-zinc-800/80"
                           }`}
                         >
                           {/* Image area */}
                           <div className="relative h-44 w-full bg-zinc-900 overflow-hidden">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img 
-                              src={stayImg} 
-                              alt={s.name} 
-                              className="w-full h-full object-cover select-none pointer-events-none" 
-                            />
+                            {s.image_url ? (
+                              /* eslint-disable-next-line @next/next/no-img-element */
+                              <img
+                                src={s.image_url}
+                                alt={s.name}
+                                className="w-full h-full object-cover select-none pointer-events-none"
+                              />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center bg-zinc-950/80 px-4 text-center text-[10px] font-mono uppercase tracking-widest text-zinc-500">
+                                Image unavailable from provider
+                              </div>
+                            )}
                             {/* Provider Badge */}
                             <span className={`absolute top-3 right-3 text-[9px] font-mono font-black px-2 py-0.5 rounded shadow-md uppercase tracking-wider ${
-                              s.provider?.includes("Best Price") 
-                                ? "bg-emerald-500 text-zinc-950 font-black" 
-                                : s.provider?.includes("Airbnb") 
-                                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30" 
+                              s.provider?.includes("Best Price")
+                                ? "bg-emerald-500 text-zinc-950 font-black"
+                                : s.provider?.includes("Airbnb")
+                                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
                                 : "bg-blue-500/20 text-blue-400 border border-blue-500/30"
                             }`}>
                               {s.provider}
@@ -1776,8 +2017,8 @@ export default function DashboardPage() {
                                   setJourneySelectedStay(s);
                                 }}
                                 className={`w-full py-2.5 rounded-xl text-xs font-black cursor-pointer transition-all shadow-md active:scale-98 ${
-                                  isSelected 
-                                    ? "bg-emerald-500 text-zinc-950 font-black shadow-emerald-500/20" 
+                                  isSelected
+                                    ? "bg-emerald-500 text-zinc-950 font-black shadow-emerald-500/20"
                                     : "bg-zinc-900 border border-zinc-850 text-zinc-300 hover:border-emerald-500/50 hover:text-emerald-400"
                                 }`}
                               >
@@ -1812,116 +2053,662 @@ export default function DashboardPage() {
         })()}
 
         {/* Step 4: Route Directions Form & Output */}
-        {journeyStep === 4 && (
-          <div className="space-y-6 py-2">
-            <div className="section-label">Step 4: Route directions to {journeyStadium}</div>
-            
-            {journeySelectedStay && (
-              <div className="p-4 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.01] flex justify-between items-center text-xs">
-                <div>
-                  <span className="text-zinc-500">Selected Lodging: </span>
-                  <span className="font-extrabold text-emerald-400">{journeySelectedStay.name}</span>
+        {journeyStep === 4 && (() => {
+          const stayPrice = journeySelectedStay ? parseFloat(journeySelectedStay.price_usd) || 0 : 0;
+          const transitPrice = journeyRoutes && journeyRoutes[selectedRouteIdx] ? parseFloat(journeyRoutes[selectedRouteIdx].cost_usd) || 0 : 0;
+          const ticketPrice = 50.0;
+          const grandTotal = stayPrice + transitPrice + ticketPrice;
+
+          return (
+            <div className="space-y-6 py-2">
+              <div className="section-label">Step 4: Route directions to {journeyStadium}</div>
+
+              {journeySelectedStay && (
+                <div className="p-4 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.01] flex justify-between items-center text-xs">
+                  <div>
+                    <span className="text-zinc-500">Selected Lodging: </span>
+                    <span className="font-extrabold text-emerald-400">{journeySelectedStay.name}</span>
+                  </div>
+                  <div className="font-mono text-zinc-400">
+                    ${journeySelectedStay.price_usd} / night
+                  </div>
                 </div>
-                <div className="font-mono text-zinc-400">
-                  ${journeySelectedStay.price_usd} / night
+              )}
+
+              {/* Inputs */}
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div className="sm:col-span-2 space-y-1">
+                  <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider">Starting Location (Origin)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. London, UK or hotel name"
+                    value={journeyOrigin}
+                    onChange={e => setJourneyOrigin(e.target.value)}
+                    className="w-full bg-zinc-900 border border-zinc-800 focus:border-emerald-500 rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-600 outline-none transition-colors"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider">Travel Mode</label>
+                  <select
+                    value={journeyRouteMode}
+                    onChange={e => setJourneyRouteMode(e.target.value)}
+                    className="w-full bg-zinc-900 border border-zinc-800 focus:border-emerald-500 rounded-xl px-4 py-2.5 text-sm text-white outline-none transition-colors"
+                  >
+                    <option value="transit">Metro / Transit</option>
+                    <option value="walking">Walking</option>
+                    <option value="cab">Taxi / Driving</option>
+                  </select>
                 </div>
               </div>
-            )}
 
-            {/* Inputs */}
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="sm:col-span-2 space-y-1">
-                <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider">Starting Location (Origin)</label>
-                <input
-                  type="text"
-                  placeholder="e.g. London, UK or hotel name"
-                  value={journeyOrigin}
-                  onChange={e => setJourneyOrigin(e.target.value)}
-                  className="w-full bg-zinc-900 border border-zinc-800 focus:border-emerald-500 rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-600 outline-none transition-colors"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider">Travel Mode</label>
-                <select
-                  value={journeyRouteMode}
-                  onChange={e => setJourneyRouteMode(e.target.value)}
-                  className="w-full bg-zinc-900 border border-zinc-800 focus:border-emerald-500 rounded-xl px-4 py-2.5 text-sm text-white outline-none transition-colors"
+              <div className="flex justify-end">
+                <button
+                  onClick={handleFetchRoutes}
+                  disabled={journeyRouteLoading || !journeyOrigin.trim()}
+                  className="book-ticket-btn"
                 >
-                  <option value="transit">Metro / Transit</option>
-                  <option value="walking">Walking</option>
-                  <option value="cab">Taxi / Driving</option>
-                </select>
+                  {journeyRouteLoading ? "Calculating..." : "Calculate Route 🔍"}
+                </button>
               </div>
-            </div>
 
-            <div className="flex justify-end">
-              <button
-                onClick={handleFetchRoutes}
-                disabled={journeyRouteLoading || !journeyOrigin.trim()}
-                className="book-ticket-btn"
-              >
-                {journeyRouteLoading ? "Calculating..." : "Calculate Route 🔍"}
-              </button>
-            </div>
+              {/* Route Output */}
+              {journeyRouteError && (
+                <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-500 text-xs rounded-lg font-mono">
+                  ⚠️ {journeyRouteError}
+                </div>
+              )}
 
-            {/* Route Output */}
-            {journeyRouteError && (
-              <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-500 text-xs rounded-lg font-mono">
-                ⚠️ {journeyRouteError}
-              </div>
-            )}
+              {journeyRoutes && journeyRoutes.length > 0 && (
+                <div className="space-y-4 pt-2">
+                  <div className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Select Preferred Travel Option:</div>
 
-            {journeyRoutes && journeyRoutes.length > 0 && (
-              <div className="space-y-3 pt-2">
-                <div className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Route Segments found:</div>
-                <div className="space-y-3">
-                  {journeyRoutes.map((route, rIdx) => (
-                    <div key={rIdx} className="p-4 rounded-xl border border-zinc-800 bg-zinc-950/40 space-y-2">
-                      <div className="flex justify-between text-xs font-mono">
-                        <span className="font-extrabold text-emerald-400 uppercase tracking-wider">🚀 Mode: {route.mode}</span>
-                        <span className="text-zinc-400">Duration: <strong className="text-white">{route.duration_minutes} min</strong></span>
-                        <span className="text-zinc-400">Cost: <strong className="text-white">${route.cost_usd}</strong></span>
+                  {/* Tabbed Selectors */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {journeyRoutes.map((route, rIdx) => {
+                      const isRouteSelected = selectedRouteIdx === rIdx;
+                      return (
+                        <button
+                          key={rIdx}
+                          onClick={() => {
+                            setSelectedRouteIdx(rIdx);
+                            setJourneySelectedRoute(route);
+                          }}
+                          className={`p-4 rounded-xl border text-left flex flex-col justify-between gap-2 transition-all duration-350 hover:scale-[1.01] cursor-pointer ${
+                            isRouteSelected
+                              ? "border-emerald-500 bg-emerald-500/[0.03] shadow-[0_0_15px_rgba(16,185,129,0.05)]"
+                              : "border-zinc-800 bg-zinc-900/20 hover:border-zinc-700"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className={`text-[10px] font-mono font-extrabold uppercase px-2 py-0.5 rounded ${
+                              isRouteSelected ? "bg-emerald-500 text-zinc-950" : "bg-zinc-800 text-zinc-400"
+                            }`}>
+                              {route.mode}
+                            </span>
+                            <span className="text-xs font-bold text-white">${route.cost_usd}</span>
+                          </div>
+                          <div className="text-xs text-zinc-400 font-mono">
+                            Duration: <strong className="text-zinc-200">{route.duration_minutes} mins</strong>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Active Route Steps Details */}
+                  <div className="p-4 rounded-xl border border-zinc-800 bg-zinc-950/40 space-y-3">
+                    <div className="text-xs font-bold text-emerald-400 font-mono uppercase tracking-wider">
+                      Detailed Transfer Advisory ({journeyRoutes[selectedRouteIdx]?.mode || "Selected Option"}):
+                    </div>
+                    <div className="text-xs text-zinc-300 leading-relaxed font-mono pl-3 border-l border-emerald-500/30 text-left">
+                      {journeyRoutes[selectedRouteIdx]?.steps}
+                    </div>
+                  </div>
+
+                  {/* Dynamic Fare Breakdown Card */}
+                  <div className="p-5 rounded-2xl border border-zinc-800 bg-zinc-900/40 space-y-4">
+                    <h4 className="text-xs font-extrabold text-zinc-400 uppercase tracking-wider text-left">Estimated Fare Summary</h4>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-left">
+                      <div className="p-3 rounded-xl bg-zinc-950/50 border border-zinc-850">
+                        <span className="text-[9px] font-mono text-zinc-550 uppercase tracking-widest font-extrabold">Lodging</span>
+                        <p className="text-sm font-black text-white mt-1">${stayPrice.toFixed(2)}</p>
                       </div>
-                      <div className="text-xs text-zinc-300 leading-relaxed font-mono pl-2 border-l border-emerald-500/30">
-                        {route.steps}
+                      <div className="p-3 rounded-xl bg-zinc-950/50 border border-zinc-850">
+                        <span className="text-[9px] font-mono text-zinc-550 uppercase tracking-widest font-extrabold">Transit</span>
+                        <p className="text-sm font-black text-white mt-1">${transitPrice.toFixed(2)}</p>
+                      </div>
+                      <div className="p-3 rounded-xl bg-zinc-950/50 border border-zinc-850">
+                        <span className="text-[9px] font-mono text-zinc-550 uppercase tracking-widest font-extrabold">Match Ticket</span>
+                        <p className="text-sm font-black text-white mt-1">${ticketPrice.toFixed(2)}</p>
+                      </div>
+                      <div className="p-3 rounded-xl bg-zinc-950/50 border border-emerald-500/20 bg-emerald-500/[0.01]">
+                        <span className="text-[9px] font-mono text-emerald-500/70 uppercase tracking-widest font-extrabold">Grand Total</span>
+                        <p className="text-sm font-black text-emerald-400 mt-1">${grandTotal.toFixed(2)}</p>
                       </div>
                     </div>
-                  ))}
+                    <div className="flex items-center justify-between text-[10px] font-mono text-zinc-550 pt-2 border-t border-zinc-850">
+                      <span>Target Budget Limit: ${journeyMaxPrice.toFixed(2)}</span>
+                      <span className={grandTotal <= journeyMaxPrice ? "text-emerald-400 font-extrabold" : "text-red-400 font-extrabold"}>
+                        {grandTotal <= journeyMaxPrice ? "✓ WITHIN BUDGET" : "⚠️ BUDGET COMPROMISED"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Map Placeholder Notice */}
+              <div className="p-4 bg-emerald-500/[0.02] border border-emerald-500/10 rounded-xl flex items-start gap-3 text-xs leading-relaxed text-zinc-500">
+                <div className="text-emerald-500 font-extrabold text-lg mt-0.5">🗺️</div>
+                <div className="text-left">
+                  <strong className="text-zinc-400 block mb-1">Route Map and GPS Navigation Status</strong>
+                  Turn-by-turn map navigation, live transit trackers, and interactive stadium gate maps are currently placeholders and will be connected in a future release.
                 </div>
               </div>
-            )}
 
-            {/* Map Placeholder Notice */}
-            <div className="p-4 bg-emerald-500/[0.02] border border-emerald-500/10 rounded-xl flex items-start gap-3 text-xs leading-relaxed text-zinc-500">
-              <div className="text-emerald-500 font-extrabold text-lg mt-0.5">🗺️</div>
-              <div>
-                <strong className="text-zinc-400 block mb-1">Route Map and GPS Navigation Status</strong>
-                Turn-by-turn map navigation, live transit trackers, and interactive stadium gate maps are currently placeholders and will be connected in a future release (will be done later).
+              <div className="flex justify-between pt-4 border-t border-zinc-800">
+                <button
+                  onClick={() => setJourneyStep(3)}
+                  className="text-sm font-bold text-zinc-500 hover:text-emerald-500 cursor-pointer"
+                >
+                  ← Back to Stays
+                </button>
+                <button
+                  onClick={() => setJourneyStep(5)}
+                  className="book-ticket-btn"
+                >
+                  Explore & Safety Advisory →
+                </button>
               </div>
             </div>
+          );
+        })()}
 
-            <div className="flex justify-between pt-4 border-t border-zinc-800">
-              <button
-                onClick={() => setJourneyStep(3)}
-                className="text-sm font-bold text-zinc-500 hover:text-emerald-500 cursor-pointer"
-              >
-                ← Back to Stays
-              </button>
-              <button
-                onClick={() => {
-                  setJourneyStep(1);
-                  setJourneyStays([]);
-                  setJourneyRoutes([]);
-                  setJourneySelectedStay(null);
-                }}
-                className="px-4 py-2 border border-zinc-800 hover:border-zinc-700 text-xs font-bold rounded-lg text-zinc-300 cursor-pointer"
-              >
-                Restart Planner ↺
-              </button>
+        {/* Step 5: Explore & Safety */}
+        {journeyStep === 5 && (() => {
+          const stayPrice = journeySelectedStay ? parseFloat(journeySelectedStay.price_usd) || 0 : 0;
+          const activeRoute = journeySelectedRoute || (journeyRoutes && journeyRoutes[selectedRouteIdx] ? journeyRoutes[selectedRouteIdx] : null);
+          const transitPrice = activeRoute ? parseFloat(activeRoute.cost_usd) || 0 : 0;
+          const ticketPrice = 50.0;
+          const grandTotal = stayPrice + transitPrice + ticketPrice;
+
+          const recs = journeyRecommendations || {};
+          const activePlaces = recs[activePlacesTab] || [];
+
+          const safety = journeySafetyBriefing || {
+            level: "Low Risk",
+            score: 8.8,
+            summary: `Standard precautions are recommended in the destination area. Security measures are active.`,
+            emergencyNumbers: { Emergency: "112", "Non-Emergency": "101" },
+            tips: [
+              "Keep personal items secure in crowded stadium walkways.",
+              "Stick to designated fan corridors and well-lit roads.",
+              "Use official transportation or ride-sharing networks."
+            ]
+          };
+          const stayOptions = journeyStays.length ? journeyStays : (journeySelectedStay ? [journeySelectedStay] : []);
+          const routeOptions = journeyRoutes.length ? journeyRoutes : (activeRoute ? [activeRoute] : []);
+          const rebaseRouteToStay = (route: any, stay: any) => {
+            if (!route || !stay?.name) return route;
+            const previousStayName = route.connects_to || journeySelectedStay?.name || "";
+            const swapStayName = (value: string) => previousStayName ? value.split(previousStayName).join(stay.name) : value;
+            return {
+              ...route,
+              connects_to: stay.name,
+              steps: typeof route.steps === "string" ? swapStayName(route.steps) : route.steps,
+              legs: Array.isArray(route.legs)
+                ? route.legs.map((leg: any) => ({
+                    ...leg,
+                    detail: typeof leg.detail === "string" ? swapStayName(leg.detail) : leg.detail,
+                  }))
+                : route.legs,
+            };
+          };
+
+          return (
+            <div className="space-y-6 py-2">
+              <div className="section-label">Step 5: Event City Explore & Safety Dispatch</div>
+
+              {journeyDataWarnings.length > 0 && (
+                <div className="rounded-2xl border border-yellow-500/25 bg-yellow-500/[0.04] p-4 text-left">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-yellow-300">Provider data warning</h4>
+                  <div className="mt-2 grid gap-2">
+                    {journeyDataWarnings.map((warning, wIdx) => (
+                      <p key={wIdx} className="text-xs leading-relaxed text-yellow-100/80">{warning}</p>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="grid gap-5 xl:grid-cols-12">
+                <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5 text-left xl:col-span-2">
+                  <span className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest font-extrabold">Match</span>
+                  <h4 className="mt-2 text-sm font-black text-white leading-snug">{journeyMatchName || "Selected match"}</h4>
+                  <p className="mt-1 text-[10px] text-zinc-500">{journeyStadium}</p>
+                  <p className="mt-1 text-[10px] font-mono text-emerald-400">{journeyMatchDate || "Date TBD"}</p>
+                </div>
+
+                <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.02] p-5 text-left xl:col-span-5">
+                  <span className="text-[9px] font-mono text-emerald-500/80 uppercase tracking-widest font-extrabold">Selected stay</span>
+                  {journeySelectedStay ? (
+                    <>
+                      <h4 className="mt-2 text-base font-black text-white leading-snug">{journeySelectedStay.name}</h4>
+                      <div className="mt-3 grid grid-cols-3 gap-3 text-[10px] font-mono">
+                        <span className="rounded-lg bg-zinc-950/50 px-3 py-2 text-zinc-300">{journeySelectedStay.type || "Stay"}</span>
+                        <span className="rounded-lg bg-zinc-950/50 px-3 py-2 text-zinc-300">${stayPrice.toFixed(2)}/night</span>
+                        <span className="rounded-lg bg-zinc-950/50 px-3 py-2 text-zinc-300">{journeySelectedStay.distance_miles ?? "--"} mi</span>
+                      </div>
+                      {journeySelectedStayReason && (
+                        <p className="mt-3 text-xs leading-relaxed text-zinc-400">{journeySelectedStayReason}</p>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setShowStayOptions(prev => !prev)}
+                        className="mt-4 w-full rounded-lg border border-emerald-500/20 bg-emerald-500/[0.04] px-3 py-3 text-[10px] font-black uppercase tracking-wider text-emerald-300 hover:border-emerald-500/50"
+                      >
+                        {showStayOptions ? "Hide stay options" : "Open stay details and other options"}
+                      </button>
+                    </>
+                  ) : (
+                    <div className="mt-3 rounded-xl border border-red-500/25 bg-red-500/[0.04] p-4">
+                      <h4 className="text-sm font-black text-red-300">Stay data unavailable</h4>
+                      <p className="mt-2 text-xs leading-relaxed text-red-100/70">No hotel/hostel provider result was returned. Check the stay API/provider configuration and retry.</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="rounded-2xl border border-blue-500/20 bg-blue-500/[0.02] p-5 text-left xl:col-span-5">
+                  <span className="text-[9px] font-mono text-blue-300 uppercase tracking-widest font-extrabold">
+                    {String(activeRoute?.mode || "").toLowerCase().includes("flight") ? "Selected flight route" : "Selected route"}
+                  </span>
+                  {activeRoute ? (
+                    <>
+                      <h4 className="mt-2 text-base font-black text-white leading-snug">{activeRoute.mode}</h4>
+                      <div className="mt-3 grid grid-cols-2 gap-3 text-[10px] font-mono">
+                        <span className="rounded-lg bg-zinc-950/50 px-3 py-2 text-zinc-300">{activeRoute.duration_minutes ?? "--"} mins</span>
+                        <span className="rounded-lg bg-zinc-950/50 px-3 py-2 text-zinc-300">${transitPrice.toFixed(2)}</span>
+                      </div>
+                      <p className="mt-3 text-xs leading-relaxed text-zinc-400">{journeySelectedRouteReason || activeRoute.steps}</p>
+                      <button
+                        type="button"
+                        onClick={() => setShowRouteOptions(prev => !prev)}
+                        className="mt-4 w-full rounded-lg border border-blue-500/20 bg-blue-500/[0.04] px-3 py-3 text-[10px] font-black uppercase tracking-wider text-blue-300 hover:border-blue-500/50"
+                      >
+                        {showRouteOptions ? "Hide route preferences" : "Open route details and preferences"}
+                      </button>
+                    </>
+                  ) : (
+                    <div className="mt-3 rounded-xl border border-red-500/25 bg-red-500/[0.04] p-4">
+                      <h4 className="text-sm font-black text-red-300">Route data unavailable</h4>
+                      <p className="mt-2 text-xs leading-relaxed text-red-100/70">No flight/train/road provider result was returned. Connect a directions, rail, flight, or maps provider and retry.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {(showStayOptions || showRouteOptions) && (
+                <div className="grid gap-5 xl:grid-cols-2">
+                  {showStayOptions && (
+                    <div className="rounded-2xl border border-emerald-500/20 bg-zinc-900/50 p-4 text-left">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <h4 className="text-xs font-black uppercase tracking-wider text-emerald-300">Stay details</h4>
+                          <p className="text-[10px] text-zinc-500">Selected stay plus other hotel/hostel options.</p>
+                        </div>
+                        <span className="rounded-full border border-zinc-800 bg-zinc-950/60 px-2 py-1 text-[9px] font-mono text-zinc-400">
+                          {stayOptions.length} options
+                        </span>
+                      </div>
+
+                      <div className="mt-4 space-y-3">
+                        {stayOptions.length === 0 && (
+                          <div className="rounded-xl border border-red-500/25 bg-red-500/[0.04] p-4 text-xs leading-relaxed text-red-100/75">
+                            No stay options were returned by the lodging provider. Nothing has been substituted.
+                          </div>
+                        )}
+                        {stayOptions.slice(0, 5).map((stay: any, sIdx: number) => {
+                          const isCurrentStay = journeySelectedStay?.name === stay.name;
+                          return (
+                            <button
+                              key={`${stay.name}-${sIdx}`}
+                              type="button"
+                              onClick={() => {
+                                setJourneySelectedStay(stay);
+                                setJourneySelectedStayReason(stay.why || "Selected from the available stay options.");
+                                setJourneySelectedRoute((prev: any) => rebaseRouteToStay(prev, stay));
+                              }}
+                              className={`w-full rounded-xl border p-3 text-left transition-all ${
+                                isCurrentStay
+                                  ? "border-emerald-500/60 bg-emerald-500/[0.06]"
+                                  : "border-zinc-800 bg-zinc-950/40 hover:border-emerald-500/30"
+                              }`}
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <p className="text-xs font-black text-white">{stay.name}</p>
+                                  <p className="mt-1 text-[10px] text-zinc-500">{stay.amenities?.join(" | ") || "Amenities not listed"}</p>
+                                </div>
+                                <span className={`rounded-full px-2 py-1 text-[9px] font-mono font-bold ${isCurrentStay ? "bg-emerald-500 text-zinc-950" : "bg-zinc-800 text-zinc-300"}`}>
+                                  {isCurrentStay ? "Selected" : "Choose"}
+                                </span>
+                              </div>
+                              <div className="mt-2 grid grid-cols-3 gap-2 text-[10px] font-mono text-zinc-300">
+                                <span className="rounded-lg bg-black/25 px-2 py-1">{stay.type || "stay"}</span>
+                                <span className="rounded-lg bg-black/25 px-2 py-1">${Number(stay.price_usd || 0).toFixed(2)}</span>
+                                <span className="rounded-lg bg-black/25 px-2 py-1">{stay.distance_miles ?? "--"} mi</span>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {showRouteOptions && (
+                    <div className="rounded-2xl border border-blue-500/20 bg-zinc-900/50 p-4 text-left">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <h4 className="text-xs font-black uppercase tracking-wider text-blue-300">Route preferences</h4>
+                          <p className="text-[10px] text-zinc-500">Switch flight, train, road, metro, and mixed transfer plans.</p>
+                        </div>
+                        <span className="rounded-full border border-zinc-800 bg-zinc-950/60 px-2 py-1 text-[9px] font-mono text-zinc-400">
+                          {routeOptions.length} options
+                        </span>
+                      </div>
+
+                      <div className="mt-4 space-y-3">
+                        {routeOptions.length === 0 && (
+                          <div className="rounded-xl border border-red-500/25 bg-red-500/[0.04] p-4 text-xs leading-relaxed text-red-100/75">
+                            No flight, train, road, or metro route options were returned by the directions provider. Nothing has been substituted.
+                          </div>
+                        )}
+                        {routeOptions.slice(0, 6).map((route: any, rIdx: number) => {
+                          const isCurrentRoute = activeRoute?.mode === route.mode;
+                          return (
+                            <button
+                              key={`${route.mode}-${rIdx}`}
+                              type="button"
+                              onClick={() => {
+                                const routeForStay = rebaseRouteToStay(route, journeySelectedStay);
+                                setSelectedRouteIdx(rIdx);
+                                setJourneySelectedRoute(routeForStay);
+                                setJourneySelectedRouteReason(routeForStay.best_for || "Selected route preference.");
+                              }}
+                              className={`w-full rounded-xl border p-3 text-left transition-all ${
+                                isCurrentRoute
+                                  ? "border-blue-500/60 bg-blue-500/[0.06]"
+                                  : "border-zinc-800 bg-zinc-950/40 hover:border-blue-500/30"
+                              }`}
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <p className="text-xs font-black text-white">{route.mode}</p>
+                                  <p className="mt-1 text-[10px] text-zinc-500">{route.best_for || route.steps}</p>
+                                </div>
+                                <span className={`rounded-full px-2 py-1 text-[9px] font-mono font-bold ${isCurrentRoute ? "bg-blue-400 text-zinc-950" : "bg-zinc-800 text-zinc-300"}`}>
+                                  {isCurrentRoute ? "Selected" : "Switch"}
+                                </span>
+                              </div>
+                              <div className="mt-2 grid grid-cols-2 gap-2 text-[10px] font-mono text-zinc-300">
+                                <span className="rounded-lg bg-black/25 px-2 py-1">{route.duration_minutes ?? "--"} mins</span>
+                                <span className="rounded-lg bg-black/25 px-2 py-1">${Number(route.cost_usd || 0).toFixed(2)}</span>
+                              </div>
+                              {route.legs?.length > 0 && (
+                                <div className="mt-2 space-y-1 border-l border-blue-500/30 pl-3">
+                                  {route.legs.slice(0, 4).map((leg: any, legIdx: number) => (
+                                    <div key={legIdx} className="text-[9px] leading-relaxed text-zinc-400">
+                                      <span className="font-bold text-blue-300">{leg.label}:</span> {leg.detail}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* AI Dispatch Summary briefing if available */}
+              {journeySummary && (
+                <div className="p-5 rounded-2xl border border-violet-500/20 bg-violet-500/[0.02] space-y-3 relative overflow-hidden">
+                  <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-violet-500/40 to-transparent" />
+                  <div className="flex items-center gap-2 text-violet-400 justify-start">
+                    <span className="text-base">✨</span>
+                    <h4 className="text-xs font-black uppercase tracking-wider">Globus 2026 AI Agent Briefing</h4>
+                  </div>
+                  <div className="text-xs text-zinc-300 leading-relaxed space-y-2 text-left font-mono">
+                    {renderMd(journeySummary)}
+                  </div>
+                </div>
+              )}
+
+              {/* Safety Briefing Panel */}
+              <div className="grid gap-6 md:grid-cols-3">
+                {/* Risk assessment */}
+                <div className="md:col-span-2 p-5 rounded-2xl border border-zinc-800 bg-zinc-900/40 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-extrabold text-zinc-400 uppercase tracking-wider">City Safety Assessment</h4>
+                    <span className={`text-[10px] font-mono font-black px-2.5 py-0.5 rounded uppercase tracking-wider ${
+                      safety.level?.toLowerCase().includes("high")
+                        ? "bg-red-500/20 text-red-400 border border-red-500/30"
+                        : safety.level?.toLowerCase().includes("moderate") || safety.level?.toLowerCase().includes("caution")
+                        ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30"
+                        : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                    }`}>
+                      {safety.level}
+                    </span>
+                  </div>
+
+                  <div className="flex items-start gap-4">
+                    <div className="flex flex-col items-center justify-center bg-zinc-950/60 border border-zinc-850 rounded-xl px-4 py-3 min-w-[70px]">
+                      <span className="text-zinc-500 text-[8px] font-mono font-bold uppercase tracking-widest leading-none">Score</span>
+                      <span className="text-xl font-black text-emerald-400 mt-1">{safety.score}/10</span>
+                    </div>
+                    <div className="text-xs text-zinc-400 leading-relaxed text-left">
+                      {safety.summary}
+                      <div className="mt-2 inline-flex rounded-full border border-blue-500/20 bg-blue-500/[0.05] px-2 py-1 text-[9px] font-mono font-bold uppercase tracking-widest text-blue-300">
+                        {safety.sourceLabel || "Estimated safety status"}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 pt-2 border-t border-zinc-850">
+                    <span className="text-[10px] font-mono font-extrabold text-zinc-500 uppercase tracking-widest block text-left">Event Day Safety Guidelines:</span>
+                    <ul className="space-y-1.5 text-xs text-zinc-300 text-left list-none pl-0">
+                      {(safety.tips || []).map((tip: string, tIdx: number) => (
+                        <li key={tIdx} className="flex gap-2 items-start justify-start">
+                          <span className="text-emerald-500 font-extrabold mt-0.5">✓</span>
+                          <span>{tip}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {(journeySafetySources.length > 0 || journeyValidationChecks.length > 0) && (
+                    <div className="grid gap-3 pt-2 border-t border-zinc-850 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <span className="text-[10px] font-mono font-extrabold text-zinc-500 uppercase tracking-widest block text-left">RAG Sources Used:</span>
+                        {(journeySafetySources.length ? journeySafetySources : safety.sourcesUsed || []).slice(0, 3).map((src: any, sIdx: number) => (
+                          <div key={sIdx} className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-2 text-left">
+                            <p className="text-[10px] font-bold text-zinc-300">{src.title || "Safety source"}</p>
+                            <p className="mt-0.5 line-clamp-2 text-[9px] text-zinc-500">{src.excerpt || src.scope}</p>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="space-y-2">
+                        <span className="text-[10px] font-mono font-extrabold text-zinc-500 uppercase tracking-widest block text-left">Validation Checks:</span>
+                        {journeyValidationChecks.slice(0, 4).map((check: any, cIdx: number) => (
+                          <div key={cIdx} className="flex items-start gap-2 rounded-lg border border-zinc-800 bg-zinc-950/40 p-2 text-left">
+                            <span className={`mt-0.5 h-2 w-2 rounded-full ${check.status === "pass" ? "bg-emerald-400" : "bg-yellow-400"}`} />
+                            <div>
+                              <p className="text-[10px] font-bold text-zinc-300">{check.label}</p>
+                              <p className="mt-0.5 text-[9px] text-zinc-500">{check.detail}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Emergency Numbers widget */}
+                <div className="p-5 rounded-2xl border border-zinc-800 bg-zinc-900/40 flex flex-col justify-between gap-4">
+                  <div className="space-y-1 text-left">
+                    <h4 className="text-xs font-extrabold text-zinc-400 uppercase tracking-wider">Emergency Contact Lines</h4>
+                    <p className="text-[10px] text-zinc-500">Official dispatch hotlines for the local authority.</p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="p-3 rounded-xl bg-zinc-950/60 border border-zinc-850 flex items-center justify-between">
+                      <div className="text-left">
+                        <span className="text-[8px] font-mono text-zinc-550 uppercase tracking-widest font-extrabold">Emergency Dispatch</span>
+                        <p className="text-xs font-bold text-red-400 mt-0.5">Police / Ambulance / Fire</p>
+                      </div>
+                      <span className="text-sm font-black text-white font-mono">{safety.emergencyNumbers?.Emergency || "112"}</span>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-zinc-950/60 border border-zinc-850 flex items-center justify-between">
+                      <div className="text-left">
+                        <span className="text-[8px] font-mono text-zinc-550 uppercase tracking-widest font-extrabold">Non-Emergency Line</span>
+                        <p className="text-xs font-bold text-zinc-400 mt-0.5">Enquiries / Minor Reports</p>
+                      </div>
+                      <span className="text-sm font-black text-zinc-300 font-mono">{safety.emergencyNumbers?.["Non-Emergency"] || "101"}</span>
+                    </div>
+                  </div>
+
+                  <div className="text-[9px] font-mono text-zinc-650 leading-tight text-center">
+                    *Toll-free from any mobile or landline device.
+                  </div>
+                </div>
+              </div>
+
+              {/* Nearby Places Section */}
+              <div className="p-5 rounded-2xl border border-zinc-800 bg-zinc-900/40 space-y-5">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-zinc-850">
+                  <div className="text-left">
+                    <h4 className="text-xs font-extrabold text-zinc-400 uppercase tracking-wider">Explore Nearby Facilities</h4>
+                    <p className="text-[10px] text-zinc-500">Convenient spots geocoded around {journeyStadium}.</p>
+                  </div>
+
+                  {/* Places Category Tabs */}
+                  <div className="flex flex-wrap gap-1.5 bg-zinc-950/80 p-1 rounded-xl border border-zinc-850">
+                    {[
+                      { id: "restaurants", label: "🍔 Dine" },
+                      { id: "convenience_stores", label: "🛒 Convenience" },
+                      { id: "pharmacies", label: "💊 Essentials" },
+                      { id: "tourist_spots", label: "📸 Sightseeing" }
+                    ].map(tab => (
+                      <button
+                        key={tab.id}
+                        onClick={() => setActivePlacesTab(tab.id)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          activePlacesTab === tab.id
+                            ? "bg-emerald-500 text-zinc-950 font-black shadow-md"
+                            : "text-zinc-400 hover:text-white"
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Places Grid */}
+                {activePlaces.length === 0 ? (
+                  <div className="py-6 text-center text-xs text-zinc-550 font-mono">
+                    No results reported for this category.
+                  </div>
+                ) : (
+                  <div className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
+                    {activePlaces.map((place: any, pIdx: number) => {
+                      // Backend may return places as plain strings OR as objects
+                      // with keys {name, type, rating, distance_miles, address}
+                      const placeName = typeof place === "string" ? place : (place?.name || "Unknown");
+                      const placeAddress = typeof place === "object" ? place?.address : null;
+                      const placeRating = typeof place === "object" ? place?.rating : null;
+                      const placeDistance = typeof place === "object" ? place?.distance_miles : null;
+
+                      return (
+                        <div key={pIdx} className="p-3.5 rounded-xl border border-zinc-800 bg-zinc-950/40 text-left flex items-start gap-3">
+                          <span className="text-base mt-0.5">
+                            {activePlacesTab === "restaurants" ? "🍻" : activePlacesTab === "convenience_stores" ? "🏪" : activePlacesTab === "pharmacies" ? "🏥" : "📍"}
+                          </span>
+                          <div>
+                            <p className="text-xs font-bold text-white line-clamp-1">{placeName}</p>
+                            {placeAddress && (
+                              <span className="text-[9px] text-zinc-500 block mt-0.5 line-clamp-1">{placeAddress}</span>
+                            )}
+                            <span className="text-[9px] font-mono text-zinc-550 uppercase mt-0.5 block">
+                              {placeRating ? `★ ${placeRating}` : ""}
+                              {placeRating && placeDistance ? " · " : ""}
+                              {placeDistance ? `${placeDistance} mi` : "Geocoded radius match"}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Complete Booking HUD */}
+              <div className="p-6 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.02] flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="text-left space-y-1">
+                  <h4 className="text-sm font-black text-white uppercase tracking-tight font-black">Lock in your Travel Briefing</h4>
+                  <p className="text-xs text-zinc-400">Secure stay bookings, route maps, and match tickets in one click.</p>
+                </div>
+                <div className="flex items-center gap-3 justify-end w-full md:w-auto">
+                  <div className="text-right">
+                    <span className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest font-extrabold block">Briefing Total Fare</span>
+                    <strong className="text-lg font-black text-emerald-400 font-mono">${grandTotal.toFixed(2)}</strong>
+                  </div>
+                  <button
+                    onClick={() => {
+                      alert("Logistics briefing saved! Your ticket booking reference code is OS-2026-DISPATCH.");
+                    }}
+                    className="book-ticket-btn"
+                  >
+                    Confirm Entire Plan ✓
+                  </button>
+                </div>
+              </div>
+
+              {/* Step 5 Footer buttons */}
+              <div className="flex justify-between pt-4 border-t border-zinc-800">
+                <button
+                  onClick={() => setJourneyStep(4)}
+                  className="text-sm font-bold text-zinc-500 hover:text-emerald-500 cursor-pointer"
+                >
+                  ← Back to Route
+                </button>
+                <button
+                  onClick={() => {
+                    setJourneyStep(1);
+                    setJourneyStays([]);
+                    setJourneyRoutes([]);
+                    setJourneySelectedStay(null);
+                    setJourneySelectedRoute(null);
+                    setJourneySelectedStayReason("");
+                    setJourneySelectedRouteReason("");
+                    setJourneySafetySources([]);
+                    setJourneyValidationChecks([]);
+                    setJourneyDataWarnings([]);
+                    setJourneySummary("");
+                    setPlanningMode(null);
+                    setAiPrompt("");
+                  }}
+                  className="px-4 py-2 border border-zinc-800 hover:border-zinc-700 text-xs font-bold rounded-lg text-zinc-300 cursor-pointer"
+                >
+                  Restart Planner ↺
+                </button>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
     );
   };
