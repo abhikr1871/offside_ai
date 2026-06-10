@@ -264,32 +264,95 @@ class AgentService:
 
     async def run_chat(self, email: str, query: str, lodging: str = None) -> Dict[str, Any]:
         """
-        Simulate the LangGraph orchestration node workflow:
-        1. Read state & profile dependencies
-        2. Determine target tools (MCP Server)
-        3. Call tools & synthesize results in official Globus markdown format
+        AI-powered Chat orchestration:
+        1. Read profile
+        2. Use Gemini to determine target tools (or fall back to regex/keywords)
+        3. Call tools via MCP client
+        4. Synthesize final response via Gemini (or fall back to static template)
         """
         profile = await self.get_user_profile(email)
         query_lower = query.lower()
 
         tool_calls_made = []
         action_details = []
+        markdown_reply = ""
 
-        # Extract target stadium from query if mentioned, else fallback to profile
-        if "emirates" in query_lower:
-            target_stadium = "Emirates Stadium"
-        elif "anfield" in query_lower:
-            target_stadium = "Anfield"
-        elif "bernabeu" in query_lower or "bernabéu" in query_lower:
-            target_stadium = "Santiago Bernabéu"
+        # Check if we can use the LLM model
+        if self.llm_model:
+            intent_prompt = f"""
+            You are the logistics router node for Globus 2026.
+            Your task is to analyze the user's query and decide which MCP tools (from the list below) should be called to fetch data, or if the query can be answered directly using your general knowledge.
+
+            User Profile Context:
+            - Name: {profile.get('name')}
+            - Followed Teams: {profile.get('followed_teams')}
+            - Favorite Stadium: {profile.get('stadium')}
+            - Home City: {profile.get('city')}
+            - Home Street: {profile.get('street')}
+            - Selected Lodging: {lodging or "None"}
+
+            Available Tools:
+            1. "search_stays": Find lodging options (hotels, hostels, airbnbs, shared rooms).
+               Arguments:
+               - stadium: string (name of target stadium, e.g. "Emirates Stadium")
+               - accommodation_type: string ("all", "hotel", "hostel", "shared_room", "airbnb")
+               - max_price: number (optional)
+               - min_rating: number (optional)
+               - required_amenities: array of strings (e.g. ["WiFi", "AC"])
+            2. "get_directions": Find transit routes, taxi estimates, and walking directions from an origin to the stadium.
+               Arguments:
+               - origin: string (starting address, city, or hotel name)
+               - destination: string (destination stadium name)
+               - mode: string ("transit", "walking", "cab")
+            3. "get_food_reviews": Find restaurants, convenience stores, pubs, pharmacies, tourist spots, and reviews around a stadium or lodging.
+               Arguments:
+               - venue: string (stadium name or hotel name/address to search around)
+            4. "get_team_matches": Fetch upcoming fixtures, competitor names, kickoff dates, and schedule for a team.
+               Arguments:
+               - team_name: string (name of the club team)
+
+            Response Guidelines:
+            - If the user asks a general question (e.g., football trivia, weather estimates, who won a match in the past, general greetings, etc.) that does NOT require querying live stays, directions, schedules, or nearby places, do NOT call any tools. Set tool_calls to an empty list.
+            - If the user asks about "me", "my lodging", "my hotel", etc., and they have a selected lodging, use the selected lodging name ("{lodging or ''}") as the origin for directions or venue for nearby reviews.
+            - If the user asks for directions, stays, schedules, or reviews, construct the tool_calls list with correct arguments.
+
+            Return ONLY a valid JSON object. Do not include markdown code block formatting or other text.
+            JSON Response Schema:
+            {{
+                "tool_calls": [
+                    {{
+                        "name": "search_stays" | "get_directions" | "get_food_reviews" | "get_team_matches",
+                        "arguments": {{ ... }}
+                    }}
+                ]
+            }}
+
+            User Query: "{query}"
+            JSON Response:
+            """
+            try:
+                response = self.llm_model.generate_content(
+                    intent_prompt,
+                    generation_config={"response_mime_type": "application/json"}
+                )
+                import json
+                clean_text = response.text.strip()
+                start_idx = clean_text.find('{')
+                end_idx = clean_text.rfind('}')
+                if start_idx != -1 and end_idx != -1:
+                    clean_text = clean_text[start_idx:end_idx+1]
+                data = json.loads(clean_text)
+                llm_tool_calls = data.get("tool_calls", [])
+            except Exception as e:
+                print(f"Gemini intent routing failed: {e}")
+                llm_tool_calls = None
         else:
-            target_stadium = profile.get("stadium") or "Emirates Stadium"
-
-        user_city = profile.get("city") or "London"
+            llm_tool_calls = None
 
         from app.mcp.stay_mcp_client import StayMCPClient
         client = StayMCPClient()
 
+        # Connect MCP Client
         try:
             await client.connect()
         except Exception as exc:
@@ -300,129 +363,142 @@ class AgentService:
             }
 
         try:
-            # 1. Check if query is about Hostels/Hotels/Accommodation/Airbnb/Staying
-            if any(w in query_lower for w in ["hostel", "hotel", "stay", "accommodation", "room", "airbnb", "lodging"]):
-                types_to_include = []
-                if "hotel" in query_lower:
-                    types_to_include.append("hotel")
-                if "hostel" in query_lower:
-                    types_to_include.append("hostel")
-                if "shared" in query_lower or "sharing" in query_lower or "dorm" in query_lower:
-                    types_to_include.append("shared_room")
-                if "airbnb" in query_lower or "apartment" in query_lower:
-                    types_to_include.append("airbnb")
+            if llm_tool_calls is not None:
+                # Execute Gemini-selected tools
+                for tc in llm_tool_calls:
+                    name = tc.get("name")
+                    args = tc.get("arguments") or {}
+                    if name in ["search_stays", "get_directions", "get_food_reviews", "get_team_matches"]:
+                        tool_calls_made.append({
+                            "name": name,
+                            "arguments": args
+                        })
+                        res = await client.call_tool(name, args)
+                        action_details.append(res)
+            else:
+                # Fallback to keyword-based checks
+                if any(w in query_lower for w in ["hostel", "hotel", "stay", "accommodation", "room", "airbnb", "lodging"]):
+                    types_to_include = []
+                    if "hotel" in query_lower:
+                        types_to_include.append("hotel")
+                    if "hostel" in query_lower:
+                        types_to_include.append("hostel")
+                    if "shared" in query_lower or "sharing" in query_lower or "dorm" in query_lower:
+                        types_to_include.append("shared_room")
+                    if "airbnb" in query_lower or "apartment" in query_lower:
+                        types_to_include.append("airbnb")
 
-                if len(types_to_include) == 1:
-                    acc_type = types_to_include[0]
-                else:
-                    acc_type = "all"
+                    acc_type = types_to_include[0] if len(types_to_include) == 1 else "all"
 
-                max_price = None
-                import re
-                price_match = re.search(r'(?:under|below|max|budget)?\s*\$?\s*(\d+)\s*(?:usd|dollars)?', query_lower)
-                if price_match:
-                    extracted = int(price_match.group(1))
-                    if extracted < 1000:  # Avoid matching years
-                        max_price = extracted
+                    max_price = None
+                    import re
+                    price_match = re.search(r'(?:under|below|max|budget)?\s*\$?\s*(\d+)\s*(?:usd|dollars)?', query_lower)
+                    if price_match:
+                        extracted = int(price_match.group(1))
+                        if extracted < 1000:
+                            max_price = extracted
 
-                min_rating = None
-                rating_match = re.search(r'(?:rating|stars?)\s*(?:above|over|of|at least|>=|>)?\s*([0-9.]+)', query_lower)
-                if rating_match:
-                    try:
-                        min_rating = float(rating_match.group(1))
-                    except ValueError:
-                        pass
+                    min_rating = None
+                    rating_match = re.search(r'(?:rating|stars?)\s*(?:above|over|of|at least|>=|>)?\s*([0-9.]+)', query_lower)
+                    if rating_match:
+                        try:
+                            min_rating = float(rating_match.group(1))
+                        except ValueError:
+                            pass
 
-                sort_by = "price"
-                if "rating" in query_lower:
-                    sort_by = "rating"
+                    sort_by = "rating" if "rating" in query_lower else "price"
+                    req_amenities = []
+                    for am in ["wifi", "breakfast", "kitchen", "ac", "pool", "gym", "bar"]:
+                        if am in query_lower:
+                            req_amenities.append(am.replace("wifi", "WiFi").replace("breakfast", "Free Breakfast").replace("ac", "AC").title())
 
-                req_amenities = []
-                if "wifi" in query_lower:
-                    req_amenities.append("WiFi")
-                if "breakfast" in query_lower:
-                    req_amenities.append("Free Breakfast")
-                if "kitchen" in query_lower:
-                    req_amenities.append("Kitchen")
-                if "ac" in query_lower or "air cond" in query_lower:
-                    req_amenities.append("AC")
-                if "pool" in query_lower:
-                    req_amenities.append("Pool")
-                if "gym" in query_lower:
-                    req_amenities.append("Gym")
-                if "bar" in query_lower:
-                    req_amenities.append("Bar")
+                    arguments = {"stadium": profile.get("stadium") or "Emirates Stadium", "accommodation_type": acc_type}
+                    if max_price is not None:
+                        arguments["max_price"] = max_price
+                    if min_rating is not None:
+                        arguments["min_rating"] = min_rating
+                    if req_amenities:
+                        arguments["required_amenities"] = req_amenities
+                    if sort_by != "price":
+                        arguments["sort_by"] = sort_by
 
-                arguments = {
-                    "stadium": target_stadium,
-                    "accommodation_type": acc_type
-                }
-                if max_price is not None:
-                    arguments["max_price"] = max_price
-                if min_rating is not None:
-                    arguments["min_rating"] = min_rating
-                if req_amenities:
-                    arguments["required_amenities"] = req_amenities
-                if sort_by != "price":
-                    arguments["sort_by"] = sort_by
+                    tool_calls_made.append({"name": "search_stays", "arguments": arguments})
+                    res = await client.call_tool("search_stays", arguments)
+                    if len(types_to_include) > 1 and res.get("status") == "success" and "stays" in res:
+                        res["stays"] = [s for s in res["stays"] if s["type"] in types_to_include]
+                    action_details.append(res)
 
-                tool_calls_made.append({
-                    "name": "search_stays",
-                    "arguments": arguments
-                })
-                res = await client.call_tool("search_stays", arguments)
+                if any(w in query_lower for w in ["directions", "route", "travel", "metro", "cab", "walk", "get to"]):
+                    dir_args = {"origin": user_city, "destination": profile.get("stadium") or "Emirates Stadium", "mode": "transit"}
+                    tool_calls_made.append({"name": "get_directions", "arguments": dir_args})
+                    res = await client.call_tool("get_directions", dir_args)
+                    action_details.append(res)
 
-                # Post-filter if multiple specific types were requested but tool had to query "all"
-                if len(types_to_include) > 1 and res.get("status") == "success" and "stays" in res:
-                    res["stays"] = [s for s in res["stays"] if s["type"] in types_to_include]
+                if any(w in query_lower for w in ["food", "drink", "pub", "restaurant", "review", "pie", "shop", "store", "supermarket", "grocery", "groceries", "pharmacy", "tourist", "sight", "sights"]):
+                    search_origin = profile.get("stadium") or "Emirates Stadium"
+                    if any(w in query_lower for w in ["me", "my lodging", "my hotel", "my stay", "here"]):
+                        if lodging:
+                            search_origin = lodging
+                        elif profile.get("street") and profile.get("city"):
+                            search_origin = f"{profile['street']}, {profile['city']}"
+                        elif profile.get("city"):
+                            search_origin = profile["city"]
 
-                action_details.append(res)
+                    rev_args = {"venue": search_origin}
+                    tool_calls_made.append({"name": "get_food_reviews", "arguments": rev_args})
+                    res = await client.call_tool("get_food_reviews", rev_args)
+                    action_details.append(res)
 
-            # 2. Check if query is about Directions/Route/Travel
-            if any(w in query_lower for w in ["directions", "route", "travel", "metro", "cab", "walk", "get to"]):
-                dir_args = {"origin": user_city, "destination": target_stadium, "mode": "transit"}
-                tool_calls_made.append({
-                    "name": "get_directions",
-                    "arguments": dir_args
-                })
-                res = await client.call_tool("get_directions", dir_args)
-                action_details.append(res)
-
-            # 3. Check if query is about Reviews/Food/Drinks/Shops/Convenience/Sights
-            if any(w in query_lower for w in ["food", "drink", "pub", "restaurant", "review", "pie", "shop", "store", "supermarket", "grocery", "groceries", "pharmacy", "tourist", "sight", "sights"]):
-                # Determine search origin: if query asks about "near me" or lodging is set
-                search_origin = target_stadium
-                if any(w in query_lower for w in ["me", "my lodging", "my hotel", "my stay", "here"]):
-                    if lodging:
-                        search_origin = lodging
-                    elif profile.get("street") and profile.get("city"):
-                        search_origin = f"{profile['street']}, {profile['city']}"
-                    elif profile.get("city"):
-                        search_origin = profile["city"]
-
-                rev_args = {"venue": search_origin}
-                tool_calls_made.append({
-                    "name": "get_food_reviews",
-                    "arguments": rev_args
-                })
-                res = await client.call_tool("get_food_reviews", rev_args)
-                action_details.append(res)
-
-            # 4. Check if query is about Match/Schedule/Fixtures
-            if any(w in query_lower for w in ["match", "fixture", "schedule", "game", "upcoming"]):
-                target_team = profile.get("followed_teams")[0] if profile.get("followed_teams") else "Arsenal"
-                match_args = {"team_name": target_team}
-                tool_calls_made.append({
-                    "name": "get_team_matches",
-                    "arguments": match_args
-                })
-                res = await client.call_tool("get_team_matches", match_args)
-                action_details.append(res)
+                if any(w in query_lower for w in ["match", "fixture", "schedule", "game", "upcoming"]):
+                    target_team = profile.get("followed_teams")[0] if profile.get("followed_teams") else "Arsenal"
+                    match_args = {"team_name": target_team}
+                    tool_calls_made.append({"name": "get_team_matches", "arguments": match_args})
+                    res = await client.call_tool("get_team_matches", match_args)
+                    action_details.append(res)
         finally:
             await client.disconnect()
 
-        # Synthesize markdown response utilizing the official Globus 2026 layout template
-        markdown_reply = self._synthesize_response(query, profile, tool_calls_made, action_details)
+        # Synthesis
+        if self.llm_model:
+            # Clean action details for prompt size
+            action_details_clean = []
+            for ad in action_details:
+                clean_ad = dict(ad)
+                if "stays" in clean_ad:
+                    clean_ad["stays"] = clean_ad["stays"][:5]
+                action_details_clean.append(clean_ad)
+
+            synthesis_prompt = f"""
+            You are Globus 2026, the premium autonomous World Cup logistics coordinator and assistant.
+            Provide a highly polished, helpful, and natural response to the user's query.
+
+            User Profile Context:
+            - Name: {profile.get('name')}
+            - Followed Teams: {profile.get('followed_teams')}
+            - Favorite Stadium: {profile.get('stadium')}
+            - Home City: {profile.get('city')}
+            - Selected Lodging: {lodging or "None"}
+
+            User Query: "{query}"
+
+            Tools Executed & Data Returned:
+            {json.dumps(action_details_clean, indent=2)}
+
+            Guidelines:
+            - If tools were executed, incorporate the fetched details (stays, routes, places, fixtures) in your answer. Present them clearly using markdown tables, bullet points, or clean sections.
+            - If no tools were executed or returned errors, answer the user's query directly using your general knowledge (which could be about football, clubs, stadiums, travel advice, or standard greetings).
+            - Keep it relevant, highly professional, and align with the "Globus 2026 Operations" theme.
+            - Do NOT include any markdown code block wrappers (e.g. ```markdown) around the response itself. Output the raw markdown text directly.
+            """
+            try:
+                response = self.llm_model.generate_content(synthesis_prompt)
+                markdown_reply = response.text.strip()
+            except Exception as e:
+                print(f"Gemini response synthesis failed: {e}")
+                markdown_reply = ""
+
+        if not markdown_reply:
+            markdown_reply = self._synthesize_response(query, profile, tool_calls_made, action_details)
 
         return {
             "reply": markdown_reply,
