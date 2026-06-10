@@ -32,19 +32,45 @@ def resolve_stadium_coords(stadium: str) -> tuple:
         if key in stadium_lower or stadium_lower in key:
             return coords
 
+    # If the stadium/location contains ' - ', we should try geocoding parts of it.
+    queries_to_try = [stadium]
+    if " - " in stadium:
+        parts = [p.strip() for p in stadium.split(" - ")]
+        if len(parts) > 1:
+            queries_to_try.append(parts[1])
+        queries_to_try.append(parts[0])
+
+    cleaned_queries = []
+    for q in queries_to_try:
+        if q not in cleaned_queries:
+            cleaned_queries.append(q)
+        lower_q = q.lower()
+        cleaned = q
+        for prefix in ["room in ", "hotel in ", "hostel in ", "apartment in ", "stay in ", "flat in "]:
+            if lower_q.startswith(prefix):
+                cleaned = q[len(prefix):]
+                break
+        if cleaned != q and cleaned not in cleaned_queries:
+            cleaned_queries.append(cleaned)
+
     # OpenStreetMap Nominatim geocoding lookup
     import urllib.parse
+    headers = {"User-Agent": "Offside-AI-Travel-Planner/1.0 (contact: support@offside.ai)"}
     try:
-        url = f"https://nominatim.openstreetmap.org/search?q={urllib.parse.quote(stadium)}&format=json&limit=1"
-        headers = {"User-Agent": "Offside-AI-Travel-Planner/1.0 (contact: support@offside.ai)"}
         with httpx.Client() as client:
-            resp = client.get(url, headers=headers, timeout=5.0)
-            if resp.status_code == 200:
-                data = resp.json()
-                if data:
-                    return float(data[0]["lat"]), float(data[0]["lon"])
+            for query in cleaned_queries:
+                try:
+                    url = f"https://nominatim.openstreetmap.org/search?q={urllib.parse.quote(query)}&format=json&limit=1"
+                    resp = client.get(url, headers=headers, timeout=5.0)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        if data:
+                            return float(data[0]["lat"]), float(data[0]["lon"])
+                except Exception as exc:
+                    sys.stderr.write(f"Geocoding error for {query}: {exc}\n")
+                    sys.stderr.flush()
     except Exception as exc:
-        sys.stderr.write(f"Geocoding error for {stadium}: {exc}\n")
+        sys.stderr.write(f"Client error during geocoding: {exc}\n")
         sys.stderr.flush()
 
     return 51.5549, -0.108436 # Fallback to London coordinates
@@ -286,7 +312,9 @@ def query_airbnb(stadium_name: str, lat: float, lng: float, check_in: str, check
                     "distance_miles": distance,
                     "amenities": amenities,
                     "provider": "Airbnb (OpenBNB)",
-                    "image_url": image_url
+                    "image_url": image_url,
+                    "latitude": lat_h,
+                    "longitude": lng_h
                 })
             return results
     except Exception as exc:
@@ -416,7 +444,9 @@ def query_hotelbeds(lat: float, lng: float, check_in: str, check_out: str, max_p
                     "rating": rating,
                     "distance_miles": distance,
                     "amenities": amenities,
-                    "provider": "Hotelbeds"
+                    "provider": "Hotelbeds",
+                    "latitude": lat_h,
+                    "longitude": lng_h
                 })
             return results
     except Exception as exc:
@@ -536,7 +566,9 @@ def query_liteapi(lat: float, lng: float, check_in: str, check_out: str, max_pri
                     "rating": rating,
                     "distance_miles": distance,
                     "amenities": amenities,
-                    "provider": "LiteAPI"
+                    "provider": "LiteAPI",
+                    "latitude": lat_h,
+                    "longitude": lng_h
                 })
             return results
     except Exception as exc:
@@ -697,170 +729,12 @@ def fetch_google_nearby_recommendations(destination: str) -> dict:
         sys.stderr.flush()
         return None
 
-def get_mock_nearby_recommendations(stadium: str) -> dict:
-    stadium_lower = stadium.strip().lower()
-
-    if "emirates" in stadium_lower:
-        return {
-            "restaurants": [
-                {"name": "The Tollington Arms", "type": "Pub/Restaurant", "rating": 4.7, "distance_miles": 0.2, "address": "115 Hornsey Rd, London"},
-                {"name": "Piebury Corner", "type": "Gourmet Pies", "rating": 4.8, "distance_miles": 0.3, "address": "209-211 Holloway Rd, London"},
-                {"name": "Westerns Laundry", "type": "Seafood/Bar", "rating": 4.6, "distance_miles": 0.5, "address": "34 Drayton Park, London"}
-            ],
-            "convenience_stores": [
-                {"name": "Tesco Express Highbury", "type": "Grocery Store", "rating": 4.1, "distance_miles": 0.4, "address": "Benwell Rd, London"},
-                {"name": "Sainsbury's Local Holloway", "type": "Grocery Store", "rating": 4.2, "distance_miles": 0.5, "address": "25 Holloway Rd, London"}
-            ],
-            "pharmacies": [
-                {"name": "Well Pharmacy Islington", "type": "Pharmacy", "rating": 4.3, "distance_miles": 0.6, "address": "Highbury Corner, London"},
-                {"name": "Boots Pharmacy Holloway", "type": "Pharmacy", "rating": 4.4, "distance_miles": 0.7, "address": "Holloway Rd, London"}
-            ],
-            "tourist_spots": [
-                {"name": "Arsenal Museum & Stadium Tour", "type": "Museum/Attraction", "rating": 4.8, "distance_miles": 0.1, "address": "Emirates Stadium, London"},
-                {"name": "Highbury Fields Park", "type": "Park/Recreation", "rating": 4.5, "distance_miles": 0.8, "address": "Highbury Crescent, London"}
-            ]
-        }
-    elif "anfield" in stadium_lower:
-        return {
-            "restaurants": [
-                {"name": "The Albert Pub", "type": "Pub/Restaurant", "rating": 4.6, "distance_miles": 0.1, "address": "185 Walton Breck Rd, Liverpool"},
-                {"name": "Homebaked Anfield", "type": "Community Bakery", "rating": 4.9, "distance_miles": 0.2, "address": "197 Oakfield Rd, Liverpool"},
-                {"name": "Sandon Pub", "type": "Pub/Bistro", "rating": 4.5, "distance_miles": 0.4, "address": "178-182 Oakfield Rd, Liverpool"}
-            ],
-            "convenience_stores": [
-                {"name": "Anfield Convenience Store", "type": "Local Grocer", "rating": 4.0, "distance_miles": 0.3, "address": "Walton Breck Rd, Liverpool"},
-                {"name": "Sainsbury's Local Walton", "type": "Grocery Store", "rating": 4.2, "distance_miles": 0.8, "address": "Walton Rd, Liverpool"}
-            ],
-            "pharmacies": [
-                {"name": "Anfield Health Pharmacy", "type": "Pharmacy", "rating": 4.4, "distance_miles": 0.3, "address": "Priory Rd, Liverpool"},
-                {"name": "Co-op Pharmacy Liverpool", "type": "Pharmacy", "rating": 4.2, "distance_miles": 0.6, "address": "Walton Breck Rd, Liverpool"}
-            ],
-            "tourist_spots": [
-                {"name": "LFC Museum & Stadium Tour", "type": "Museum/Attraction", "rating": 4.8, "distance_miles": 0.1, "address": "Anfield Stadium, Liverpool"},
-                {"name": "Stanley Park & Isla Gladstone", "type": "Park/Recreation", "rating": 4.6, "distance_miles": 0.3, "address": "Anfield Rd, Liverpool"}
-            ]
-        }
-    elif "bernabeu" in stadium_lower or "bernabéu" in stadium_lower:
-        return {
-            "restaurants": [
-                {"name": "Asador Donostiarra", "type": "Steakhouse", "rating": 4.7, "distance_miles": 0.6, "address": "Calle de la Infanta Mercedes 79, Madrid"},
-                {"name": "El Bar de la Esquina", "type": "Tapas Bar", "rating": 4.4, "distance_miles": 0.2, "address": "Calle de Concha Espina, Madrid"},
-                {"name": "Real Cafe Bernabeu", "type": "Cafe/Restaurant", "rating": 4.5, "distance_miles": 0.1, "address": "Santiago Bernabéu Stadium, Madrid"}
-            ],
-            "convenience_stores": [
-                {"name": "Carrefour Express Castellana", "type": "Supermarket", "rating": 4.3, "distance_miles": 0.3, "address": "Paseo de la Castellana, Madrid"},
-                {"name": "SuperCor Concha Espina", "type": "Grocery Store", "rating": 4.2, "distance_miles": 0.4, "address": "Avenida de Concha Espina, Madrid"}
-            ],
-            "pharmacies": [
-                {"name": "Farmacia Bernabeu 24h", "type": "Pharmacy", "rating": 4.6, "distance_miles": 0.2, "address": "Paseo de la Castellana 150, Madrid"},
-                {"name": "Farmacia Castellana", "type": "Pharmacy", "rating": 4.3, "distance_miles": 0.5, "address": "Calle de San Germán, Madrid"}
-            ],
-            "tourist_spots": [
-                {"name": "Tour Bernabéu & Real Madrid Trophy Room", "type": "Museum/Attraction", "rating": 4.9, "distance_miles": 0.1, "address": "Santiago Bernabéu Stadium, Madrid"},
-                {"name": "Plaza de Lima", "type": "Public Plaza", "rating": 4.3, "distance_miles": 0.2, "address": "Paseo de la Castellana, Madrid"}
-            ]
-        }
-    else:
-        return {
-            "restaurants": [
-                {"name": f"{stadium} Sports Bar & Grill", "type": "Sports Diner", "rating": 4.3, "distance_miles": 0.4, "address": f"Near {stadium}"},
-                {"name": "The Pitchside Pub", "type": "Gastropub", "rating": 4.5, "distance_miles": 0.3, "address": f"Opposite {stadium}"}
-            ],
-            "convenience_stores": [
-                {"name": "Matchday Express Corner Shop", "type": "Convenience Store", "rating": 4.1, "distance_miles": 0.4, "address": "Stadium Approach Rd"}
-            ],
-            "pharmacies": [
-                {"name": "Stadium Gates Chemist", "type": "Pharmacy", "rating": 4.2, "distance_miles": 0.5, "address": "High St"}
-            ],
-            "tourist_spots": [
-                {"name": f"{stadium} Stadium Gates & Fan Wall", "type": "Attraction", "rating": 4.6, "distance_miles": 0.1, "address": stadium}
-            ]
-        }
-
-def get_fallback_image(acc_type: str, seed_id: int) -> str:
-    hotel_images = [
-        "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=600&q=80",
-        "https://images.unsplash.com/photo-1540541338287-41700207dee6?auto=format&fit=crop&w=600&q=80",
-        "https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?auto=format&fit=crop&w=600&q=80"
-    ]
-    hostel_images = [
-        "https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=600&q=80",
-        "https://images.unsplash.com/photo-1626125345510-4603468eedfb?auto=format&fit=crop&w=600&q=80"
-    ]
-    airbnb_images = [
-        "https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=600&q=80",
-        "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=600&q=80",
-        "https://images.unsplash.com/photo-1493809842364-78817add7ffb?auto=format&fit=crop&w=600&q=80"
-    ]
-    shared_images = [
-        "https://images.unsplash.com/photo-1505691938895-1758d7feb511?auto=format&fit=crop&w=600&q=80",
-        "https://images.unsplash.com/photo-1595526114035-0d45ed16cfbf?auto=format&fit=crop&w=600&q=80"
-    ]
-
-    if acc_type == "hotel":
-        return hotel_images[seed_id % len(hotel_images)]
-    elif acc_type == "hostel":
-        return hostel_images[seed_id % len(hostel_images)]
-    elif acc_type == "shared_room":
-        return shared_images[seed_id % len(shared_images)]
-    else:
-        return airbnb_images[seed_id % len(airbnb_images)]
 
 class ServicesMCPServer:
     def __init__(self) -> None:
-        # Static high-fidelity mock database for the World Cup / League Logistics
-        # Comprehensive accommodations database: hotels, hostels, shared rooms, airbnbs
-        self.stays = {
-            "emirates stadium": [
-                {"name": "Emirates Fan Lodge", "type": "hostel", "price_usd": 45, "rating": 4.6, "distance_miles": 0.4, "amenities": ["WiFi", "Bar", "Lockers"]},
-                {"name": "Gooner Hostel & Pub", "type": "hostel", "price_usd": 38, "rating": 4.2, "distance_miles": 0.7, "amenities": ["Free Breakfast", "Sky Sports"]},
-                {"name": "Highbury Guest Suites", "type": "hotel", "price_usd": 120, "rating": 4.8, "distance_miles": 0.5, "amenities": ["Private Bath", "WiFi", "AC", "Gym"]},
-                {"name": "Islington Luxury Apartment", "type": "airbnb", "price_usd": 95, "rating": 4.7, "distance_miles": 0.8, "amenities": ["Kitchen", "WiFi", "Washing Machine"]},
-                {"name": "Shared Fan Flat Arsenal", "type": "shared_room", "price_usd": 25, "rating": 4.0, "distance_miles": 1.2, "amenities": ["WiFi", "Shared Kitchen"]},
-                {"name": "Arsenal Fan Airbnb", "type": "airbnb", "price_usd": 55, "rating": 4.5, "distance_miles": 0.6, "amenities": ["WiFi", "Kitchen", "AC"]}
-            ],
-            "anfield": [
-                {"name": "Anfield Rooms Kopite", "type": "hostel", "price_usd": 40, "rating": 4.5, "distance_miles": 0.2, "amenities": ["WiFi", "Lounge"]},
-                {"name": "Mersey View Hostel", "type": "hostel", "price_usd": 32, "rating": 4.1, "distance_miles": 0.9, "amenities": ["Kitchen Access", "Bunk Beds"]},
-                {"name": "The Shankly Hotel", "type": "hotel", "price_usd": 140, "rating": 4.8, "distance_miles": 0.6, "amenities": ["Rooftop terrace", "WiFi", "Bar", "AC"]},
-                {"name": "Kopite Cozy Studio", "type": "airbnb", "price_usd": 85, "rating": 4.6, "distance_miles": 0.4, "amenities": ["WiFi", "Kitchen"]},
-                {"name": "LFC Shared Quarters", "type": "shared_room", "price_usd": 20, "rating": 4.2, "distance_miles": 1.0, "amenities": ["WiFi", "Lounge"]}
-            ],
-            "santiago bernabéu": [
-                {"name": "Bernabeu Star Hostal", "type": "hostel", "price_usd": 50, "rating": 4.7, "distance_miles": 0.3, "amenities": ["AC", "Ensuite", "WiFi"]},
-                {"name": "Madrid Centro Dorms", "type": "hostel", "price_usd": 30, "rating": 4.0, "distance_miles": 1.4, "amenities": ["Laundry", "Common Room"]},
-                {"name": "Castellana Grand Hotel", "type": "hotel", "price_usd": 180, "rating": 4.9, "distance_miles": 0.5, "amenities": ["Pool", "Gym", "Bar", "AC"]},
-                {"name": "Real Madrid Luxury Loft", "type": "airbnb", "price_usd": 110, "rating": 4.8, "distance_miles": 0.7, "amenities": ["Kitchen", "WiFi", "Balcony"]},
-                {"name": "Chamartín Shared Dorms", "type": "shared_room", "price_usd": 28, "rating": 4.1, "distance_miles": 1.1, "amenities": ["WiFi", "Lockers"]}
-            ]
-        }
-
-        # Backward compatibility fallback for hostels
-        self.hostels = {
-            k: [h for h in v if h["type"] == "hostel"] for k, v in self.stays.items()
-        }
-
-        self.routes = {
-            "transit": [
-                {"mode": "Metro", "duration_minutes": 22, "cost_usd": 2.50, "steps": "Walk 3m to Station -> Line 4 North (5 stops) -> Walk 2m to Gate A"},
-                {"mode": "Express Bus", "duration_minutes": 35, "cost_usd": 1.75, "steps": "Bus Stop C -> Route 102 (12 stops) -> Walk 5m to Gate D"},
-                {"mode": "Ride Share / Cab", "duration_minutes": 15, "cost_usd": 18.00, "steps": "Pick-up outside lobby -> Stadium drop-off loop C -> Walk 1m to Gate A"}
-            ],
-            "walking": [
-                {"mode": "Walking Corridor", "duration_minutes": 55, "cost_usd": 0.00, "steps": "Follow Fan Walkway East -> Enter Stadium Pedestrian Ring"}
-            ]
-        }
-
-        self.reviews = {
-            "emirates stadium": [
-                {"establishment": "The Tollington Arms", "type": "Pub", "rating": 4.7, "review": "Unmatched pre-match atmosphere. Filled with fans singing, great selection of local beers."},
-                {"establishment": "Piebury Corner", "type": "Food Stall", "rating": 4.8, "review": "Legendary pies named after club legends. Absolute must-try before kickoff."}
-            ],
-            "anfield": [
-                {"establishment": "The Albert", "type": "Pub", "rating": 4.6, "review": "Located right next to the Kop. Extremely loud and passionate fan chants before the game."},
-                {"establishment": "Homebaked Anfield", "type": "Bakery", "rating": 4.9, "review": "Community-owned bakery. The steak and blue cheese pie is world-famous."}
-            ]
-        }
+        # MCP server for lodging search, directions, reviews, and team matches
+        # Uses external APIs only - no fallback mock data
+        pass
 
     def list_tools(self) -> list:
         return [
@@ -1040,21 +914,9 @@ class ServicesMCPServer:
             stadium = arguments.get("stadium", "").strip().lower()
             max_price = arguments.get("max_price")
 
-            # Match key containing the text from configured provider data only.
-            matched_key = next((k for k in self.hostels if k in stadium or stadium in k), None)
-            if not matched_key:
-                results = []
-            else:
-                results = self.hostels[matched_key]
-
-            if max_price is not None:
-                results = [h for h in results if h["price_usd"] <= max_price]
-
             return {
-                "status": "success",
-                "stadium": arguments.get("stadium"),
-                "hostels": results,
-                "warnings": [] if results else ["No configured hostel provider returned hostels for this stadium."]
+                "status": "error",
+                "message": "Hostel search requires external API provider configuration (HBX or LiteAPI). No configured provider found."
             }
 
         elif tool_name == "get_directions":
@@ -1082,31 +944,22 @@ class ServicesMCPServer:
 
         elif tool_name == "get_food_reviews":
             venue = arguments.get("venue", "").strip().lower()
-            matched_key = next((k for k in self.reviews if k in venue or venue in k), None)
 
-            if not matched_key:
-                fallback_reviews = [
-                    {"establishment": "Local Sports Diner", "type": "Restaurant", "rating": 4.2, "review": "Great burgers and screens, gets busy on matchdays."},
-                    {"establishment": "The Corner Pint", "type": "Pub", "rating": 4.4, "review": "Friendly staff, cheap beers, standard pre-match crowd."}
-                ]
-                results = fallback_reviews
-            else:
-                results = self.reviews[matched_key]
+            recs = fetch_google_nearby_recommendations(venue)
+            if not recs:
+                return {
+                    "status": "error",
+                    "message": "Food reviews require external API provider configuration (Google Places API). No configured provider found."
+                }
 
-            return {"status": "success", "venue": arguments.get("venue"), "reviews": results}
+            return {"status": "success", "venue": arguments.get("venue"), "reviews": recs}
 
         elif tool_name == "get_team_matches":
             team_name = arguments.get("team_name")
-            # Return some mock upcoming matches
-            fixtures = [
-                {"opponent": "Manchester City", "date": "Next Saturday 15:00", "competition": "Premier League", "location": "Away"},
-                {"opponent": "AC Milan", "date": "Following Wednesday 20:00", "competition": "UEFA Champions League", "location": "Home"},
-                {"opponent": "Chelsea FC", "date": "In 2 weeks Sunday 16:30", "competition": "Premier League", "location": "Home"}
-            ]
+            
             return {
-                "status": "success",
-                "team": team_name,
-                "fixtures": fixtures
+                "status": "error",
+                "message": "Team match schedule requires external API provider configuration (football-data.org or similar). No configured provider found."
             }
 
         return {"status": "error", "message": f"Unknown tool: {tool_name}"}

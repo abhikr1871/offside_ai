@@ -461,9 +461,6 @@ class CompetitionsService:
                 detail=f"Unsupported competition code '{code_upper}'. Supported leagues are: {', '.join(sorted(SUPPORTED_COMPETITIONS))}"
             )
 
-        if code_upper == "MLS":
-            return self.generate_mock_standings("MLS")
-
         cache_collection = None
         cached_data = None
         now = datetime.now(timezone.utc)
@@ -510,7 +507,7 @@ class CompetitionsService:
                             upsert=True
                         )
                 except Exception as exc:
-                    logger.warning("Failed to fetch standings for league %s: %s. Serving fallback.", code_upper, exc)
+                    logger.warning("Failed to fetch standings for league %s: %s.", code_upper, exc)
                     
                     # Try retrieving expired cache from DB first
                     fallback_doc = None
@@ -524,8 +521,10 @@ class CompetitionsService:
                         logger.info("Serving expired standings cache for league %s.", code_upper)
                         cached_data = fallback_doc["data"]
                     else:
-                        logger.info("No standings cache found for league %s. Serving generated mock standings.", code_upper)
-                        cached_data = self.generate_mock_standings(code_upper)
+                        raise HTTPException(
+                            status_code=502,
+                            detail=f"Unable to retrieve standings for league {code_upper}."
+                        )
 
         return cached_data
 

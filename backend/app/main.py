@@ -13,7 +13,7 @@ if sys.platform == "win32":
 # ──────────────────────────────────────────────────────────────────────────────
 
 # Load local environment variables from .env file
-load_dotenv()
+load_dotenv(override=True)
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -102,6 +102,6 @@ def get_config():
             {"value": "WC", "label": "FIFA World Cup"}
         ]
     }
-# Reload trigger comment - force reload 1
+# Reload trigger comment - force reload 4
 
 

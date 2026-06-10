@@ -1,10 +1,13 @@
 import os
 import re
 import json
+import logging
 from pathlib import Path
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List
 from app.db.vector_search import vector_search_manager
-from app.api.auth import MOCK_USERS_DB
+
+logger = logging.getLogger("offside_ai.agent_service")
 
 SAFETY_KNOWLEDGE_BASE: List[Dict[str, Any]] = [
     {
@@ -113,10 +116,11 @@ class AgentService:
         self.llm_model = None
 
         api_key = os.getenv("GEMINI_API_KEY")
+        model_name = os.getenv("GEMINI_MODEL_NAME", "gemini-1.5-flash")
         if HAS_GENAI and api_key:
             try:
                 genai.configure(api_key=api_key)
-                self.llm_model = genai.GenerativeModel("gemini-2.0-flash")
+                self.llm_model = genai.GenerativeModel(model_name)
                 self.genai_initialized = True
             except Exception:
                 pass
@@ -125,7 +129,7 @@ class AgentService:
         if not self.genai_initialized and HAS_VERTEX_AI and gcp_project:
             try:
                 vertexai.init(project=gcp_project, location=os.getenv("GCP_LOCATION", "us-central1"))
-                self.llm_model = GenerativeModel("gemini-2.0-flash")
+                self.llm_model = GenerativeModel(model_name)
                 self.vertex_initialized = True
             except Exception:
                 pass
@@ -151,19 +155,7 @@ class AgentService:
             except Exception:
                 pass
 
-        # Mock DB fallback
-        if normalized_email in MOCK_USERS_DB:
-            user = MOCK_USERS_DB[normalized_email]
-            return {
-                "name": user.get("name", "User"),
-                "followed_teams": user.get("followed_teams", []),
-                "favorite_players": user.get("favorite_players", []),
-                "country": user.get("country", ""),
-                "city": user.get("city", ""),
-                "stadium": user.get("stadium", ""),
-                "street": user.get("street", "")
-            }
-
+        # Guest profile for unauthenticated users
         return {
             "name": "Guest Fan",
             "followed_teams": ["Arsenal"],
@@ -270,7 +262,7 @@ class AgentService:
                 break
         return selected
 
-    async def run_chat(self, email: str, query: str) -> Dict[str, Any]:
+    async def run_chat(self, email: str, query: str, lodging: str = None) -> Dict[str, Any]:
         """
         Simulate the LangGraph orchestration node workflow:
         1. Read state & profile dependencies
@@ -326,6 +318,7 @@ class AgentService:
                     acc_type = "all"
 
                 max_price = None
+                import re
                 price_match = re.search(r'(?:under|below|max|budget)?\s*\$?\s*(\d+)\s*(?:usd|dollars)?', query_lower)
                 if price_match:
                     extracted = int(price_match.group(1))
@@ -395,9 +388,19 @@ class AgentService:
                 res = await client.call_tool("get_directions", dir_args)
                 action_details.append(res)
 
-            # 3. Check if query is about Reviews/Food/Drinks
-            if any(w in query_lower for w in ["food", "drink", "pub", "restaurant", "review", "pie"]):
-                rev_args = {"venue": target_stadium}
+            # 3. Check if query is about Reviews/Food/Drinks/Shops/Convenience/Sights
+            if any(w in query_lower for w in ["food", "drink", "pub", "restaurant", "review", "pie", "shop", "store", "supermarket", "grocery", "groceries", "pharmacy", "tourist", "sight", "sights"]):
+                # Determine search origin: if query asks about "near me" or lodging is set
+                search_origin = target_stadium
+                if any(w in query_lower for w in ["me", "my lodging", "my hotel", "my stay", "here"]):
+                    if lodging:
+                        search_origin = lodging
+                    elif profile.get("street") and profile.get("city"):
+                        search_origin = f"{profile['street']}, {profile['city']}"
+                    elif profile.get("city"):
+                        search_origin = profile["city"]
+
+                rev_args = {"venue": search_origin}
                 tool_calls_made.append({
                     "name": "get_food_reviews",
                     "arguments": rev_args
@@ -424,7 +427,8 @@ class AgentService:
         return {
             "reply": markdown_reply,
             "profile": profile,
-            "tool_calls": tool_calls_made
+            "tool_calls": tool_calls_made,
+            "action_details": action_details
         }
 
     async def run_planning(self, email: str, prompt: str) -> Dict[str, Any]:
@@ -441,6 +445,7 @@ class AgentService:
         profile = await self.get_user_profile(email)
         prompt_lower = prompt.lower()
         user_city = profile.get("city") or "London"
+        data_warnings = []
 
         # --- Step 1: Intent & Entity Extraction (LLM Slot Filling) ---
         entities = {}
@@ -452,6 +457,8 @@ class AgentService:
 
             Fields to extract:
             - destination_city (string or null, e.g. "Madrid", "London", "Delhi")
+            - if destination is a specific stadium, also extract destination_stadium (string or null, e.g. "Emirates Stadium", "Santiago Bernabéu", "Anfield")
+            - if destination is not mentioned find nearest scheduled upcoming match between them and returen the destination stadium name
             - dates (list of strings or null)
             - budget_limit (float or null, representing maximum USD. If budget is in other currencies like INR, convert to USD. E.g. 8k INR is ~100 USD. If €150, convert to ~160 USD)
             - stadium (string or null, e.g. "Emirates Stadium", "Santiago Bernabéu", "Anfield", "Etihad Stadium")
@@ -464,21 +471,33 @@ class AgentService:
             JSON Response:
             """
             try:
-                response = self.llm_model.generate_content(extraction_prompt)
+                response = self.llm_model.generate_content(
+                    extraction_prompt,
+                    generation_config={"response_mime_type": "application/json"}
+                )
+                print("--- GEMINI EXTRACTION RESPONSE ---")
+                print(response.text)
                 clean_text = response.text.strip()
-                clean_text = re.sub(r"^```json\s*", "", clean_text)
-                clean_text = re.sub(r"\s*```$", "", clean_text)
+                start_idx = clean_text.find('{')
+                end_idx = clean_text.rfind('}')
+                if start_idx != -1 and end_idx != -1:
+                    clean_text = clean_text[start_idx:end_idx+1]
                 entities = json.loads(clean_text)
             except Exception as e:
-                # Fallback to empty if LLM fails
+                logger.error(f"Failed to extract entities from prompt: {e}")
                 entities = {}
 
         # --- Step 2: Convert to Constraints ---
         # Parse fallback values if LLM did not extract them
         budget_limit = entities.get("budget_limit")
         if budget_limit is None:
-            # Fallback regex for budget
-            budget_match = re.search(r'(?:under|below|max|budget)?\s*\$?\s*(\d+)\s*(?:usd|dollars)?', prompt_lower)
+            # Fallback regex for budget (requiring keywords or units to avoid matching dates like "30 june")
+            budget_match = re.search(r'(?:under|below|max|budget|price|limit)\s*\$?\s*(\d+)', prompt_lower)
+            if not budget_match:
+                budget_match = re.search(r'\$\s*(\d+)', prompt_lower)
+            if not budget_match:
+                budget_match = re.search(r'(\d+)\s*(?:usd|dollars|bucks)', prompt_lower)
+
             if budget_match:
                 budget_limit = float(budget_match.group(1))
             else:
@@ -490,48 +509,179 @@ class AgentService:
         dest_city = entities.get("destination_city") or user_city
         teams_filter = entities.get("teams") or []
 
-        # --- Step 3: Retrieve Candidate Options (API/Tool Call) ---
-        # 3.1 Match retrieval & Stadium constraint geocoding
-        matches = await vector_search_manager.get_all_schedules()
+        # Parse date query for matching (supporting all months)
+        date_query = None
+        if entities.get("dates"):
+            raw_date = entities["dates"][0]
+            date_query = raw_date
+            lower_d = raw_date.lower()
+            months_map = {
+                "jan": "01", "feb": "02", "mar": "03", "apr": "04", "may": "05", "jun": "06",
+                "jul": "07", "aug": "08", "sep": "09", "oct": "10", "nov": "11", "dec": "12"
+            }
+            matched_month = None
+            for name, num in months_map.items():
+                if name in lower_d:
+                    matched_month = num
+                    break
+            if matched_month:
+                day_m = re.search(r'(\d+)', lower_d)
+                if day_m:
+                    date_query = f"2026-{matched_month}-{int(day_m.group(1)):02d}"
+
+        # Resolve match details directly if enough details are provided in entities
         selected_match = None
         compromised_match = False
+        resolved_from_entities = False
 
-        # Try matching followed teams
-        followed = profile.get("followed_teams", [])
-        if followed:
-            for m in matches:
-                home = m.get("home_team", "").lower()
-                away = m.get("away_team", "").lower()
-                if any(t.lower() in home or t.lower() in away for t in followed):
-                    selected_match = m
-                    break
+        if teams_filter and date_query:
+            home_team = teams_filter[0]
+            from app.services.team_matches_helper import TEAM_ID_MAP, TEAM_METADATA
+            team_id = TEAM_ID_MAP.get(home_team)
+            if not team_id:
+                lower = home_team.lower()
+                for mapped_name, mapped_id in TEAM_ID_MAP.items():
+                    if lower in mapped_name.lower() or mapped_name.lower() in lower:
+                        team_id = mapped_id
+                        break
 
-        # Try matching prompt/extracted teams
-        if not selected_match and (teams_filter or entities.get("stadium") or entities.get("destination_city")):
+            venue = entities.get("stadium") or entities.get("destination_stadium")
+            city = entities.get("destination_city")
+            country = None
+
+            if team_id in TEAM_METADATA:
+                meta = TEAM_METADATA[team_id]
+                if not venue:
+                    venue = meta["venue"]
+                if not city:
+                    city = meta["city"]
+                country = meta["country"]
+
+            # Fallbacks
+            if not venue:
+                venue = "Stadium"
+            if not city:
+                city = "London"
+            if not country:
+                country = "United Kingdom"
+
+            selected_match = {
+                "home_team": home_team,
+                "away_team": teams_filter[1] if len(teams_filter) > 1 else "TBD",
+                "date": date_query,
+                "venue": venue,
+                "city": city,
+                "country": country
+            }
+            resolved_from_entities = True
+
+        if not resolved_from_entities:
+            # --- Step 3: Retrieve Candidate Options (API/Tool Call) ---
+            # 3.1 Match retrieval & Stadium constraint geocoding
+            matches = await vector_search_manager.get_all_schedules()
+            followed = profile.get("followed_teams", [])
+            if not matches:
+                from app.services.team_matches_helper import fetch_team_matches, TEAM_ID_MAP
+                query_teams = list(set(followed + teams_filter))
+                if not query_teams:
+                    query_teams = ["Arsenal", "PSG", "Man City", "Barcelona", "Bayern Munich"]
+
+                all_fetched = []
+                for team in query_teams:
+                    team_id = TEAM_ID_MAP.get(team)
+                    if not team_id:
+                        lower = team.lower()
+                        for mapped_name, mapped_id in TEAM_ID_MAP.items():
+                            if lower in mapped_name.lower() or mapped_name.lower() in lower:
+                                team_id = mapped_id
+                                break
+                    if team_id:
+                        try:
+                            team_m = await fetch_team_matches(team_id, team, warnings=data_warnings)
+                            if not team_m:
+                                data_warnings.append(
+                                    f"No matches found or retrieved for {team}. The team may have no upcoming scheduled matches, "
+                                    f"or access is restricted under the free subscription tier of Football-Data.org."
+                                )
+                            all_fetched.extend(team_m)
+                        except Exception as exc:
+                            data_warnings.append(f"Failed to fetch matches for {team}: {exc}")
+
+                seen_ids = set()
+                for m in all_fetched:
+                    mid = m.get("id")
+                    if mid not in seen_ids:
+                        seen_ids.add(mid)
+                        matches.append({
+                            "match_no": len(matches) + 1,
+                            "stage": m.get("league") or "Match",
+                            "date": m.get("eventDate", "").split("T")[0] if "T" in m.get("eventDate", "") else m.get("eventDate"),
+                            "time": m.get("eventDate", "").split("T")[1][:5] if "T" in m.get("eventDate", "") else "20:00",
+                            "home_team": m.get("homeTeam"),
+                            "away_team": m.get("awayTeam"),
+                            "venue": m.get("venue") or "Stadium",
+                            "city": m.get("city") or "London",
+                            "country": m.get("country") or "United Kingdom"
+                        })
+
+            # Match scoring model
+            best_score = -1000
+            best_match = None
+
             stadium_query = (entities.get("stadium") or "").lower()
             city_query = (entities.get("destination_city") or "").lower()
+
             for m in matches:
+                score = 0
                 home = m.get("home_team", "").lower()
                 away = m.get("away_team", "").lower()
                 venue = m.get("venue", "").lower()
                 city = m.get("city", "").lower()
-                if any(t.lower() in home or t.lower() in away for t in teams_filter):
-                    selected_match = m
-                    break
+                m_date = m.get("date", "")
+
+                # Match teams
+                if teams_filter:
+                    if any(t.lower() in home or t.lower() in away for t in teams_filter):
+                        score += 50
+                elif followed:
+                    if any(t.lower() in home or t.lower() in away for t in followed):
+                        score += 10
+
+                # Match stadium
                 if stadium_query and stadium_query in venue:
-                    selected_match = m
-                    break
+                    score += 30
+
+                # Match city
                 if city_query and city_query in city:
-                    selected_match = m
-                    break
+                    score += 20
 
-        # Fallback compromise match
-        if not selected_match and matches:
-            selected_match = matches[0]
-            compromised_match = True
+                # Match date proximity
+                if date_query and m_date:
+                    if m_date == date_query:
+                        score += 100
+                    else:
+                        try:
+                            dt1 = datetime.strptime(m_date, "%Y-%m-%d")
+                            dt2 = datetime.strptime(date_query, "%Y-%m-%d")
+                            diff = abs((dt1 - dt2).days)
+                            if diff <= 5:
+                                score += (6 - diff) * 10
+                        except Exception:
+                            pass
 
-        if not selected_match:
-            raise ValueError("No matches available for planning.")
+                if score > best_score:
+                    best_score = score
+                    best_match = m
+
+            if best_match and best_score > 0:
+                selected_match = best_match
+            else:
+                if matches:
+                    selected_match = matches[0]
+                    compromised_match = True
+
+            if not selected_match:
+                raise ValueError("No matches available for planning.")
 
         match_name = f"{selected_match.get('home_team')} vs {selected_match.get('away_team')}"
         match_date = selected_match.get("date", "")
@@ -551,13 +701,12 @@ class AgentService:
         stays_list = []
         routes = []
         recommendations = {}
-        data_warnings = []
 
         try:
             # Search stays candidate list
             stay_res = await client.call_tool("search_stays", {"stadium": stadium, "accommodation_type": "all"})
-            stays_list = stay_res.get("stays", [])
-            data_warnings.extend(stay_res.get("warnings", []))
+            stays_list = stay_res.get("stays") or []
+            data_warnings.extend(stay_res.get("warnings") or [])
 
             # Fetch routes
             dir_res = await client.call_tool("get_directions", {
@@ -565,9 +714,9 @@ class AgentService:
                 "destination": stadium,
                 "mode": preferred_mode
             })
-            routes = dir_res.get("routes", [])
-            recommendations = dir_res.get("recommendations", {})
-            data_warnings.extend(dir_res.get("warnings", []))
+            routes = dir_res.get("routes") or []
+            recommendations = dir_res.get("recommendations") or {}
+            data_warnings.extend(dir_res.get("warnings") or [])
         finally:
             await client.disconnect()
 
@@ -600,40 +749,7 @@ class AgentService:
             ]
         }
 
-        if self.llm_model:
-            safety_prompt = f"""
-            You are a World Cup security and safety coordinator.
-            Generate a safety briefing for travellers visiting the city of {dest_city}.
-            Use ONLY the retrieved safety context below for grounding. Do not claim live police,
-            weather, protest, incident, or emergency-feed status unless it is explicitly present.
-            Label the status as an estimate when live feeds are not available.
-
-            Retrieved safety context:
-            {safety_context}
-
-            Provide the risk level (e.g., "Low Risk", "Moderate Caution", "High Vigilance"), a safety score out of 10, a concise summary for match day around {stadium}, emergency phone numbers, and 3 specific safety tips for match-goers.
-
-            Return ONLY a valid JSON object. Do not include any markdown formatting like ```json or other text.
-            Schema:
-            {{
-                "level": "Low Risk" | "Moderate Caution" | "High Vigilance",
-                "score": float (0.0 to 10.0),
-                "summary": "string",
-                "emergencyNumbers": {{
-                    "Emergency": "string",
-                    "Non-Emergency": "string"
-                }},
-                "tips": ["string", "string", "string"]
-            }}
-            """
-            try:
-                response = self.llm_model.generate_content(safety_prompt)
-                clean_text = response.text.strip()
-                clean_text = re.sub(r"^```json\s*", "", clean_text)
-                clean_text = re.sub(r"\s*```$", "", clean_text)
-                safety_briefing = json.loads(clean_text)
-            except Exception as e:
-                print(f"Failed to generate safety briefing: {e}")
+        # Safety briefing LLM call removed here to combine with itinerary synthesis call.
 
         safety_briefing["sourceType"] = "rag_grounded_estimate"
         safety_briefing["sourceLabel"] = "Estimated + RAG Grounded"
@@ -736,9 +852,9 @@ class AgentService:
         routes = route_options
 
         # --- Step 5: Decide, Validate and Assemble Plan ---
-        stay_price = float(selected_stay.get("price_usd", 0.0)) if selected_stay else 0.0
+        stay_price = float(selected_stay.get("price_usd") or 0.0) if selected_stay else 0.0
         selected_route = routes[0] if routes else None
-        transit_cost = float(selected_route.get("cost_usd", 0.0) or 0.0) if selected_route else 0.0
+        transit_cost = float(selected_route.get("cost_usd") or 0.0) if selected_route else 0.0
         ticket_cost = 50.0
         total_cost = stay_price + transit_cost + ticket_cost
         is_within_budget = total_cost <= budget_limit
@@ -761,13 +877,13 @@ class AgentService:
             },
             {
                 "label": "Stay distance",
-                "status": "pass" if selected_stay and float(selected_stay.get("distance_miles", 99.0)) <= max_dist else "warning",
-                "detail": f"{selected_stay.get('distance_miles')} miles from {stadium}; requested max is {max_dist} miles." if selected_stay else "Stay distance could not be validated because no stay data was returned.",
+                "status": "pass" if selected_stay and float(selected_stay.get("distance_miles") or 99.0) <= max_dist else "warning",
+                "detail": f"{selected_stay.get('distance_miles') or 0.0} miles from {stadium}; requested max is {max_dist} miles." if selected_stay else "Stay distance could not be validated because no stay data was returned.",
             },
             {
                 "label": "Route feasibility",
                 "status": "pass" if selected_route and selected_route.get("steps") else "warning",
-                "detail": f"{selected_route.get('mode')} route includes {selected_route.get('duration_minutes')} minutes of planned travel." if selected_route else "Route feasibility could not be validated because no route data was returned.",
+                "detail": f"{selected_route.get('mode') or 'Transit'} route includes {selected_route.get('duration_minutes') or 0} minutes of planned travel." if selected_route else "Route feasibility could not be validated because no route data was returned.",
             },
             {
                 "label": "Safety grounding",
@@ -799,21 +915,21 @@ class AgentService:
             {
                 "id": "stay",
                 "label": "Find stay",
-                "brief": f"Selected {selected_stay.get('name')} at ${stay_price:.2f}/night, {selected_stay.get('distance_miles')} miles from the stadium." if selected_stay else "Stay provider returned no hotel/hostel result.",
+                "brief": f"Selected {selected_stay.get('name') or 'Unknown'} at ${stay_price:.2f}/night, {selected_stay.get('distance_miles') or 'TBD'} miles from the stadium." if selected_stay else "Stay provider returned no hotel/hostel result.",
                 "details": [
-                    f"Type: {selected_stay.get('type')}" if selected_stay else "Type: unavailable",
-                    f"Rating: {selected_stay.get('rating')}/5" if selected_stay else "Rating: unavailable",
+                    f"Type: {selected_stay.get('type') or 'Unknown'}" if selected_stay else "Type: unavailable",
+                    f"Rating: {selected_stay.get('rating') or 'TBD'}/5" if selected_stay else "Rating: unavailable",
                     f"Reason: {selected_stay_reason}",
                 ],
             },
             {
                 "id": "route",
                 "label": "Find route / flight",
-                "brief": f"Selected {selected_route.get('mode')} taking {selected_route.get('duration_minutes')} minutes for about ${float(selected_route.get('cost_usd', 0.0)):.2f}." if selected_route else "Route provider returned no flight/train/road option.",
+                "brief": f"Selected {selected_route.get('mode') or 'Transit'} taking {selected_route.get('duration_minutes') or 'TBD'} minutes for about ${float(selected_route.get('cost_usd') or 0.0):.2f}." if selected_route else "Route provider returned no flight/train/road option.",
                 "details": [
                     f"Origin: {origin_city}",
                     f"Destination: {dest_city} / {stadium}",
-                    f"Route: {selected_route.get('steps')}" if selected_route else "Route: unavailable",
+                    f"Route: {selected_route.get('steps') or 'TBD'}" if selected_route else "Route: unavailable",
                 ],
             },
             {
@@ -834,31 +950,37 @@ class AgentService:
             best_route = selected_route or {"mode": "Unavailable", "duration_minutes": "Unavailable", "cost_usd": 0.0, "steps": "Route provider returned no usable route."}
             stay_summary = selected_stay or {"name": "Unavailable", "type": "Unavailable", "price_usd": 0.0, "rating": "Unavailable", "distance_miles": "Unavailable", "amenities": []}
             backup_summary = backup_stay or {"name": "Unavailable", "price_usd": 0.0, "rating": "Unavailable"}
+            recs_dict = recommendations if isinstance(recommendations, dict) else {}
 
-            itinerary_prompt = f"""
-            You are Globus 2026, the premium autonomous World Cup logistics coordinator.
-            Construct a highly polished, professional, and visually premium logistics briefing and itinerary for the user based on the planned choices below.
+            combined_prompt = f"""
+            You are Globus 2026, the premium autonomous World Cup logistics coordinator and safety briefing coordinator.
+            Construct both a safety briefing for travellers visiting the city of {dest_city} around {stadium}, and a highly polished, premium itinerary.
 
-            Do NOT include markdown block wrappers like ```markdown. Output raw markdown directly.
+            Use ONLY the retrieved safety context below for grounding. Do not claim live police,
+            weather, protest, incident, or emergency-feed status unless it is explicitly present.
+            Label the status as an estimate when live feeds are not available.
+
+            Retrieved safety context:
+            {safety_context}
 
             --- LOGISTICS CONSTRAINTS & DETAILS ---
             User Target Budget: ${budget_limit:.2f} USD
             Chosen Match: {match_name} on {match_date} at {stadium}
 
             PRIMARY SELECTED LODGING:
-            - Name: {stay_summary.get('name')}
-            - Type: {stay_summary.get('type')}
-            - Price: ${stay_price:.2f}/night
-            - Rating: {stay_summary.get('rating')}/5
-            - Distance to Stadium: {stay_summary.get('distance_miles')} miles
-            - Amenities: {", ".join(stay_summary.get('amenities', []))}
+            - Name: {stay_summary.get('name') or 'Unavailable'}
+            - Type: {stay_summary.get('type') or 'Unavailable'}
+            - Price: ${float(stay_summary.get('price_usd') or 0.0):.2f}/night
+            - Rating: {stay_summary.get('rating') or 'Unavailable'}/5
+            - Distance to Stadium: {stay_summary.get('distance_miles') or 'Unavailable'} miles
+            - Amenities: {", ".join(stay_summary.get('amenities') or [])}
 
             BACKUP LODGING OPTION:
-            - Name: {backup_summary.get('name')} (Price: ${float(backup_summary.get('price_usd', 0.0)):.2f}/night, Rating: {backup_summary.get('rating', 0.0)}/5)
+            - Name: {backup_summary.get('name') or 'Unavailable'} (Price: ${float(backup_summary.get('price_usd') or 0.0):.2f}/night, Rating: {backup_summary.get('rating') or 0.0}/5)
 
             TRANSIT ROUTE:
-            - Mode: {best_route.get('mode')} (Duration: {best_route.get('duration_minutes')} mins, Cost: ${best_route.get('cost_usd', 0.0):.2f})
-            - Steps: {best_route.get('steps')}
+            - Mode: {best_route.get('mode') or 'Unavailable'} (Duration: {best_route.get('duration_minutes') or 'Unavailable'} mins, Cost: ${float(best_route.get('cost_usd') or 0.0):.2f})
+            - Steps: {best_route.get('steps') or 'Unavailable'}
 
             ESTIMATED TOTAL FARE BREAKDOWN:
             - Lodging: ${stay_price:.2f}
@@ -868,10 +990,10 @@ class AgentService:
             - Budget Status: {status_text}
 
             RECOMMENDED PLACES (NEAR STADIUM):
-            - Food & Pubs: {recommendations.get('restaurants', [])}
-            - Convenience: {recommendations.get('convenience_stores', [])}
-            - Pharmacies: {recommendations.get('pharmacies', [])}
-            - Tourist Spots: {recommendations.get('tourist_spots', [])}
+            - Food & Pubs: {recs_dict.get('restaurants') or []}
+            - Convenience: {recs_dict.get('convenience_stores') or []}
+            - Pharmacies: {recs_dict.get('pharmacies') or []}
+            - Tourist Spots: {recs_dict.get('tourist_spots') or []}
             - Data warnings: {data_warnings}
 
             Provide a premium logistics dispatch matching the Globus 2026 theme:
@@ -880,13 +1002,45 @@ class AgentService:
             - Summarize the fare breakdown.
             - Include transit routing options and transfer advisory notes (e.g. mention transfer points, walking corridors).
             - Add operations tips (risks, mitigations, transfer advisories, break points).
-            - Output should be crisp, professional, and visually structured.
+
+            Return ONLY a valid JSON object. Do not include any markdown formatting like ```json or other text.
+            JSON Response Schema:
+            {{
+                "safety_briefing": {{
+                    "level": "Low Risk" | "Moderate Caution" | "High Vigilance",
+                    "score": float (0.0 to 10.0),
+                    "summary": "string describing safety status for match day",
+                    "emergencyNumbers": {{
+                        "Emergency": "string",
+                        "Non-Emergency": "string"
+                    }},
+                    "tips": ["string", "string", "string"]
+                }},
+                "itinerary_summary": "raw markdown itinerary text..."
+            }}
             """
             try:
-                response = self.llm_model.generate_content(itinerary_prompt)
-                summary_text = response.text.strip()
+                response = self.llm_model.generate_content(
+                    combined_prompt,
+                    generation_config={"response_mime_type": "application/json"}
+                )
+                print("--- GEMINI COMBINED ITINERARY AND SAFETY RESPONSE ---")
+                print(response.text)
+                
+                clean_text = response.text.strip()
+                start_idx = clean_text.find('{')
+                end_idx = clean_text.rfind('}')
+                if start_idx != -1 and end_idx != -1:
+                    clean_text = clean_text[start_idx:end_idx+1]
+                data = json.loads(clean_text)
+                
+                if isinstance(data.get("safety_briefing"), dict):
+                    # Update safety briefing dict with LLM values
+                    for k, v in data["safety_briefing"].items():
+                        safety_briefing[k] = v
+                summary_text = data.get("itinerary_summary", "").strip()
             except Exception as e:
-                print(f"Gemini itinerary generation failed: {e}")
+                print(f"Gemini combined generation failed: {e}")
                 summary_text = ""
 
         # Fallback heuristic summary text if Gemini failed or was not initialized
@@ -1000,9 +1154,21 @@ I am ready to assist you with operations details:
                 plan_bullets.append(f"- **{r['mode']}**: takes **{r['duration_minutes']} mins** (Est Cost: ${r['cost_usd']:.2f}). Route: *{r['steps']}*")
 
         if review_data:
-            plan_bullets.append("#### 🍔 Review Service Recommendations")
-            for rev in review_data["reviews"]:
-                plan_bullets.append(f"- **{rev['establishment']}** ({rev['type']}) - Rating: **{rev['rating']}/5**: *\"{rev['review']}\"*")
+            plan_bullets.append("#### 🍔 Nearby Recommendations & Services")
+            venue_name = review_data.get("venue") or "Target Location"
+            plan_bullets.append(f"Recommendations around **{venue_name}**:")
+            reviews_val = review_data.get("reviews")
+            if isinstance(reviews_val, list):
+                for rev in reviews_val:
+                    plan_bullets.append(f"- **{rev.get('establishment', rev.get('name'))}** ({rev.get('type')}) - Rating: **{rev.get('rating')}/5**: *\"{rev.get('review', 'No review text available')}\"*")
+            elif isinstance(reviews_val, dict):
+                for cat_key, places in reviews_val.items():
+                    cat_name = cat_key.replace("_", " ").title()
+                    plan_bullets.append(f"##### 📍 {cat_name}")
+                    if not places:
+                        plan_bullets.append("*(No nearby establishments returned by Places API)*")
+                    for p in places:
+                        plan_bullets.append(f"- **{p.get('name')}** - Rating: **{p.get('rating')}/5** ({p.get('distance_miles')} miles away). Address: *{p.get('address')}*")
 
         if match_data:
             plan_bullets.append("#### ⚽ Match Service Fixtures")

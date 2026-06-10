@@ -16,11 +16,7 @@ router = APIRouter(
     tags=["tickets"],
 )
 
-# ---------------------------------------------------------------------------
-# In-memory fallback store (used when MongoDB is offline)
-# Keyed by email -> list of booking dicts
-# ---------------------------------------------------------------------------
-_TICKETS_STORE: Dict[str, List[Dict[str, Any]]] = {}
+
 
 
 # ---------------------------------------------------------------------------
@@ -64,8 +60,14 @@ class TicketDocument(BaseModel):
 async def book_ticket(req: TicketBookingRequest):
     """
     Creates a new ticket booking for the given user and match.
-    Persists to MongoDB when connected, otherwise in-memory store.
+    Requires MongoDB connection.
     """
+    if vector_search_manager.db is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Ticket service is unavailable. MongoDB connection required."
+        )
+
     email = req.email.strip().lower()
     booking_id = str(uuid.uuid4())[:8].upper()
     booked_at = datetime.now(timezone.utc).isoformat()
@@ -86,68 +88,67 @@ async def book_ticket(req: TicketBookingRequest):
         "status": "CONFIRMED",
     }
 
-    # 1. Try to persist in MongoDB
-    if vector_search_manager.db is not None:
-        try:
-            col = vector_search_manager.db["ticket_bookings"]
-            await col.insert_one({**booking_doc, "_id": booking_id})
-            return booking_doc
-        except Exception as exc:
-            # Non-fatal — fall through to in-memory store
-            pass
-
-    # 2. Fallback: in-memory store
-    _TICKETS_STORE.setdefault(email, []).append(booking_doc)
-    return booking_doc
+    try:
+        col = vector_search_manager.db["ticket_bookings"]
+        await col.insert_one({**booking_doc, "_id": booking_id})
+        return booking_doc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to book ticket: {str(exc)}"
+        )
 
 
 @router.get("/", response_model=List[TicketDocument])
 async def get_user_tickets(email: str):
     """
     Returns all booked tickets for the specified user email.
-    Reads from MongoDB when connected, otherwise from in-memory store.
+    Requires MongoDB connection.
     """
+    if vector_search_manager.db is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Ticket service is unavailable. MongoDB connection required."
+        )
+
     email = email.strip().lower()
 
-    # 1. Try MongoDB
-    if vector_search_manager.db is not None:
-        try:
-            col = vector_search_manager.db["ticket_bookings"]
-            cursor = col.find({"email": email}, {"_id": 0})
-            docs = await cursor.to_list(length=100)
-            return docs
-        except Exception:
-            pass
-
-    # 2. Fallback: in-memory store
-    return _TICKETS_STORE.get(email, [])
+    try:
+        col = vector_search_manager.db["ticket_bookings"]
+        cursor = col.find({"email": email}, {"_id": 0})
+        docs = await cursor.to_list(length=100)
+        return docs
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to retrieve tickets: {str(exc)}"
+        )
 
 
 @router.delete("/{booking_id}")
 async def cancel_ticket(booking_id: str, email: str):
     """
     Cancels (removes) a booked ticket by booking_id for the given user.
+    Requires MongoDB connection.
     """
+    if vector_search_manager.db is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Ticket service is unavailable. MongoDB connection required."
+        )
+
     email = email.strip().lower()
 
-    # 1. Try MongoDB
-    if vector_search_manager.db is not None:
-        try:
-            col = vector_search_manager.db["ticket_bookings"]
-            result = await col.delete_one({"booking_id": booking_id, "email": email})
-            if result.deleted_count == 0:
-                raise HTTPException(status_code=404, detail="Booking not found.")
-            return {"status": "cancelled", "booking_id": booking_id}
-        except HTTPException:
-            raise
-        except Exception as exc:
-            pass
-
-    # 2. Fallback: in-memory store
-    user_tickets = _TICKETS_STORE.get(email, [])
-    original_len = len(user_tickets)
-    _TICKETS_STORE[email] = [t for t in user_tickets if t["booking_id"] != booking_id]
-    if len(_TICKETS_STORE[email]) == original_len:
-        raise HTTPException(status_code=404, detail="Booking not found.")
-
-    return {"status": "cancelled", "booking_id": booking_id}
+    try:
+        col = vector_search_manager.db["ticket_bookings"]
+        result = await col.delete_one({"booking_id": booking_id, "email": email})
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Booking not found.")
+        return {"status": "cancelled", "booking_id": booking_id}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to cancel ticket: {str(exc)}"
+        )

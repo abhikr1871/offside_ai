@@ -10,6 +10,7 @@ router = APIRouter(
 class AgentChatRequest(BaseModel):
     email: str
     query: str
+    lodging: str | None = None
 
 class AgentPlanRequest(BaseModel):
     email: str
@@ -18,7 +19,7 @@ class AgentPlanRequest(BaseModel):
 @router.post("/chat")
 async def chat_with_agent(req: AgentChatRequest):
     try:
-        response = await agent_service.run_chat(req.email, req.query)
+        response = await agent_service.run_chat(req.email, req.query, req.lodging)
         return response
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

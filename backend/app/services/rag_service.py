@@ -34,12 +34,13 @@ class RAGService:
 
         # Check standard AI Studio API Key first (primary developer key)
         api_key = os.getenv("GEMINI_API_KEY")
+        model_name = os.getenv("GEMINI_MODEL_NAME", "gemini-1.5-flash")
         if HAS_GENAI and api_key:
             try:
                 genai.configure(api_key=api_key)
-                self.llm_model = genai.GenerativeModel("gemini-1.5-pro")
+                self.llm_model = genai.GenerativeModel(model_name)
                 self.genai_initialized = True
-                logger.info("Successfully initialized Google AI Studio client (Gemini SDK).")
+                logger.info(f"Successfully initialized Google AI Studio client (Gemini SDK) with model {model_name}.")
             except Exception as e:
                 logger.error(f"Failed to initialize Google AI Studio client: {e}")
 
@@ -48,7 +49,7 @@ class RAGService:
             try:
                 vertexai.init(project=PROJECT_ID, location=LOCATION)
                 self.embedding_model = TextEmbeddingModel.from_pretrained("text-embedding-004")
-                self.llm_model = GenerativeModel("gemini-1.5-pro") # Or gemini-3-pro when standard
+                self.llm_model = GenerativeModel(model_name)
                 self.vertex_initialized = True
                 logger.info("Successfully initialized GCP Vertex AI client.")
             except Exception as e:
@@ -125,118 +126,11 @@ class RAGService:
                     "model_used": f"{model_used} - {mode_name}"
                 }
             except Exception as e:
-                logger.error(f"Generative AI Generation failed: {e}. Falling back to mock answer generation.")
+                logger.error(f"Generative AI Generation failed: {e}.")
 
-        # Local mock LLM generator fallback
-        return self._generate_mock_answer(query, retrieved_docs)
+        raise RuntimeError(
+            "RAG service is unavailable. Configure GEMINI_API_KEY or GCP_PROJECT with Vertex AI credentials."
+        )
 
-    def _generate_mock_answer(self, query: str, retrieved_docs: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """
-        Simulates an LLM response generator based on retrieved schedule context.
-        """
-        from app.db.vector_search import APP_MODE
-        
-        context_items = []
-        for doc in retrieved_docs:
-            context_items.append(
-                f"**Match {doc['match_no']} ({doc['stage']})**: **{doc['home_team']}** vs **{doc['away_team']}** "
-                f"on {doc['date']} at {doc['time']} playing at **{doc['venue']}** in {doc['city']}, {doc['country']}."
-            )
-        
-        context_str = "\n- ".join(context_items)
-        q = query.lower()
-
-        if APP_MODE == "club":
-            if "final" in q or "champions league" in q or "cl" in q:
-                cl_match = next((d for d in retrieved_docs if "champions league" in d["stage"].lower()), None)
-                if cl_match:
-                    answer = (
-                        f"The **UEFA Champions League Final** (Match {cl_match['match_no']}) will be contested between "
-                        f"**{cl_match['home_team']}** and **{cl_match['away_team']}** on **{cl_match['date']}** at "
-                        f"**{cl_match['time']}** local time. It will take place at the iconic **{cl_match['venue']}** "
-                        f"in {cl_match['city']}, {cl_match['country']}."
-                    )
-                else:
-                    el_match = next((d for d in retrieved_docs if "europa league" in d["stage"].lower()), None)
-                    if el_match:
-                        answer = (
-                            f"The **UEFA Europa League Final** (Match {el_match['match_no']}) is scheduled for "
-                            f"**{el_match['date']}** at **{el_match['time']}** local time. It will feature "
-                            f"**{el_match['home_team']}** vs **{el_match['away_team']}** at **{el_match['venue']}** in {el_match['city']}, {el_match['country']}."
-                        )
-                    else:
-                        answer = "According to the club schedule, the UEFA Champions League Final takes place on May 30, 2026, featuring Real Madrid vs Manchester City at San Siro in Milan."
-            elif "premier league" in q or "england" in q or "manchester" in q or "arsenal" in q or "chelsea" in q or "manchester city" in q:
-                pl_matches = [d for d in retrieved_docs if "premier league" in d["stage"].lower()]
-                if pl_matches:
-                    match_details = "\n".join([f"- **{m['home_team']} vs {m['away_team']}** on {m['date']} at {m['time']} ({m['venue']})" for m in pl_matches])
-                    answer = f"Here are the Premier League matches from the retrieved schedule context:\n\n{match_details}"
-                else:
-                    answer = "In the Premier League schedule, key matches include Manchester City vs Arsenal and Chelsea vs Manchester United on May 17, 2026."
-            elif "laliga" in q or "spain" in q or "madrid" in q or "barcelona" in q or "real madrid" in q:
-                ll_matches = [d for d in retrieved_docs if "laliga" in d["stage"].lower()]
-                if ll_matches:
-                    match_details = "\n".join([f"- **{m['home_team']} vs {m['away_team']}** on {m['date']} ({m['venue']})" for m in ll_matches])
-                    answer = f"Here are the LaLiga matches found in the schedule:\n\n{match_details}"
-                else:
-                    answer = "A major LaLiga clash between Real Madrid and Barcelona is scheduled for May 10, 2026, at the Santiago Bernabeu in Madrid."
-            elif "mls" in q or "miami" in q or "galaxy" in q or "lafc" in q:
-                mls_matches = [d for d in retrieved_docs if "mls" in d["stage"].lower()]
-                if mls_matches:
-                    match_details = "\n".join([f"- **{m['home_team']} vs {m['away_team']}** on {m['date']} at {m['time']} ({m['venue']})" for m in mls_matches])
-                    answer = f"Here are the MLS matches in the schedule:\n\n{match_details}"
-                else:
-                    answer = "Active MLS matches in May and June 2026 include Inter Miami vs LA Galaxy (May 30) and LAFC vs Seattle Sounders (June 6)."
-            else:
-                answer = (
-                    f"Here is the relevant club schedule information matching your query:\n\n- {context_str}\n\n"
-                    f"Which league, club, or upcoming fixture can I help you check next?"
-                )
-            
-            return {
-                "query": query,
-                "answer": answer,
-                "sources": retrieved_docs,
-                "model_used": "Gemini 1.5 Pro (Simulated Club RAG)"
-            }
-        else:
-            # World Cup simulated response generator
-            if "final" in q:
-                final_match = next((d for d in retrieved_docs if d["stage"].lower() == "final"), retrieved_docs[0])
-                answer = (
-                    f"The FIFA World Cup 2026 Final (Match {final_match['match_no']}) will take place on "
-                    f"**{final_match['date']}** at **{final_match['time']}** local time. It will be hosted at "
-                    f"**{final_match['venue']}** in {final_match['city']}, {final_match['country']}."
-                )
-            elif "mexico" in q:
-                mex_matches = [d for d in retrieved_docs if d["home_team"].lower() == "mexico" or d["away_team"].lower() == "mexico"]
-                if mex_matches:
-                    answer = f"Mexico plays in the opening match of the World Cup on **{mex_matches[0]['date']}** at **{mex_matches[0]['time']}** at the historic **{mex_matches[0]['venue']}** in {mex_matches[0]['city']}."
-                else:
-                    answer = "Based on the schedule, Mexico will be playing their group stage matches starting June 11, 2026. The opening match is at Estadio Azteca."
-            elif "united states" in q or "usa" in q:
-                usa_matches = [d for d in retrieved_docs if "united states" in d["home_team"].lower() or "united states" in d["away_team"].lower()]
-                if usa_matches:
-                    answer = f"The United States starts their World Cup journey on **{usa_matches[0]['date']}** at **{usa_matches[0]['time']}** local time at **{usa_matches[0]['venue']}** in {usa_matches[0]['city']}."
-                else:
-                    answer = "The USA team plays their opening group stage match on June 12, 2026, at SoFi Stadium in Los Angeles, California."
-            elif "toronto" in q or "canada" in q:
-                can_matches = [d for d in retrieved_docs if d["home_team"].lower() == "canada" or d["away_team"].lower() == "canada"]
-                if can_matches:
-                    answer = f"Canada will host its opening match on **{can_matches[0]['date']}** at **{can_matches[0]['time']}** local time at **{can_matches[0]['venue']}** in {can_matches[0]['city']}."
-                else:
-                    answer = "Canada plays their first match on June 12, 2026, at BMO Field in Toronto, Ontario."
-            else:
-                answer = (
-                    f"Here is the relevant schedule information matching your query:\n\n- {context_str}\n\n"
-                    f"Is there any specific match, venue, or team you'd like more details on?"
-                )
-
-            return {
-                "query": query,
-                "answer": answer,
-                "sources": retrieved_docs,
-                "model_used": "Gemini 1.5 Pro (Simulated RAG)"
-            }
 
 rag_service = RAGService()

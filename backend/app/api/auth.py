@@ -19,9 +19,6 @@ class UserLogin(BaseModel):
     email: str
     password: str
 
-# In-memory mock database fallback
-MOCK_USERS_DB = {}
-
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 
@@ -34,7 +31,7 @@ async def signup(user_data: UserSignup):
     if not email or not name or not password:
         raise HTTPException(status_code=400, detail="Missing required signup details.")
 
-    # 1. If MongoDB is connected, store in MongoDB database
+    # 1. Store in MongoDB database
     if vector_search_manager.db is not None:
         try:
             users_col = vector_search_manager.db["users"]
@@ -60,30 +57,15 @@ async def signup(user_data: UserSignup):
             if isinstance(exc, HTTPException):
                 raise exc
             raise HTTPException(status_code=500, detail=f"Database error during signup: {str(exc)}")
-    
-    # 2. Fallback in-memory mock database
-    if email in MOCK_USERS_DB:
-        raise HTTPException(status_code=400, detail="An account with this email already exists.")
 
-    user_id = str(uuid.uuid4())
-    MOCK_USERS_DB[email] = {
-        "id": user_id,
-        "name": name,
-        "email": email,
-        "password": hash_password(password)
-    }
-    return {
-        "id": user_id,
-        "name": name,
-        "email": email
-    }
+    raise HTTPException(status_code=503, detail="Database unavailable. Signup is not available without MongoDB.")
 
 @router.post("/login")
 async def login(user_data: UserLogin):
     email = user_data.email.strip().lower()
     password = user_data.password
 
-    # 1. If MongoDB is connected, verify in MongoDB database
+    # 1. Verify in MongoDB database
     if vector_search_manager.db is not None:
         try:
             users_col = vector_search_manager.db["users"]
@@ -105,20 +87,7 @@ async def login(user_data: UserLogin):
                 raise exc
             raise HTTPException(status_code=500, detail=f"Database error during login: {str(exc)}")
 
-    # 2. Fallback in-memory mock database
-    if email not in MOCK_USERS_DB:
-        raise HTTPException(status_code=400, detail="Invalid email or password.")
-
-    user = MOCK_USERS_DB[email]
-    hashed = hash_password(password)
-    if user["password"] != hashed:
-        raise HTTPException(status_code=400, detail="Invalid email or password.")
-
-    return {
-        "id": user["id"],
-        "name": user["name"],
-        "email": user["email"]
-    }
+    raise HTTPException(status_code=503, detail="Database unavailable. Login is not available without MongoDB.")
 
 class UserProfileUpdate(BaseModel):
     email: str
@@ -133,7 +102,7 @@ class UserProfileUpdate(BaseModel):
 async def update_profile(profile: UserProfileUpdate):
     email = profile.email.strip().lower()
 
-    # 1. If MongoDB is connected, store profile details in MongoDB database
+    # 1. Store profile details in MongoDB database
     if vector_search_manager.db is not None:
         try:
             users_col = vector_search_manager.db["users"]
@@ -159,20 +128,7 @@ async def update_profile(profile: UserProfileUpdate):
                 raise exc
             raise HTTPException(status_code=500, detail=f"Database error during profile update: {str(exc)}")
 
-    # 2. Fallback in-memory mock database
-    if email not in MOCK_USERS_DB:
-        raise HTTPException(status_code=404, detail="User not found.")
-
-    MOCK_USERS_DB[email].update({
-        "followed_teams": profile.followed_teams,
-        "favorite_players": profile.favorite_players,
-        "country": profile.country,
-        "city": profile.city,
-        "stadium": profile.stadium,
-        "street": profile.street,
-        "onboarded": True
-    })
-    return {"status": "success", "message": "Profile updated successfully (mock)."}
+    raise HTTPException(status_code=503, detail="Database unavailable. Profile updates are not available without MongoDB.")
 
 @router.get("/profile")
 async def get_profile(email: str):
@@ -199,26 +155,4 @@ async def get_profile(email: str):
                 raise exc
             raise HTTPException(status_code=500, detail=f"Database error during profile fetch: {str(exc)}")
 
-    if email not in MOCK_USERS_DB:
-        return {
-            "name": "Guest Fan",
-            "followed_teams": ["Arsenal"],
-            "favorite_players": ["Bukayo Saka"],
-            "country": "United Kingdom",
-            "city": "London",
-            "stadium": "Emirates Stadium",
-            "street": "Highbury Hill",
-            "onboarded": True
-        }
-
-    user = MOCK_USERS_DB[email]
-    return {
-        "name": user.get("name", "User"),
-        "followed_teams": user.get("followed_teams", []),
-        "favorite_players": user.get("favorite_players", []),
-        "country": user.get("country", ""),
-        "city": user.get("city", ""),
-        "stadium": user.get("stadium", ""),
-        "street": user.get("street", ""),
-        "onboarded": user.get("onboarded", False)
-    }
+    raise HTTPException(status_code=503, detail="Database unavailable. Profile data is not available without MongoDB.")

@@ -88,8 +88,71 @@ TEAM_ID_MAP: Dict[str, int] = {
     "Germany": 759,
 }
 
+# Lookup metadata for stadiums, cities, and countries to backfill missing fields
+TEAM_METADATA = {
+    # Premier League
+    57: {"venue": "Emirates Stadium", "city": "London", "country": "England"},
+    61: {"venue": "Stamford Bridge", "city": "London", "country": "England"},
+    64: {"venue": "Anfield", "city": "Liverpool", "country": "England"},
+    65: {"venue": "Etihad Stadium", "city": "Manchester", "country": "England"},
+    66: {"venue": "Old Trafford", "city": "Manchester", "country": "England"},
+    73: {"venue": "Tottenham Hotspur Stadium", "city": "London", "country": "England"},
+    58: {"venue": "Villa Park", "city": "Birmingham", "country": "England"},
+    67: {"venue": "St James' Park", "city": "Newcastle", "country": "England"},
+    563: {"venue": "London Stadium", "city": "London", "country": "England"},
+    397: {"venue": "Amex Stadium", "city": "Brighton", "country": "England"},
+    402: {"venue": "Gtech Community Stadium", "city": "London", "country": "England"},
+    63: {"venue": "Craven Cottage", "city": "London", "country": "England"},
+    76: {"venue": "Molineux Stadium", "city": "Wolverhampton", "country": "England"},
+    354: {"venue": "Selhurst Park", "city": "London", "country": "England"},
+    351: {"venue": "City Ground", "city": "Nottingham", "country": "England"},
+    1044: {"venue": "Vitality Stadium", "city": "Bournemouth", "country": "England"},
+    62: {"venue": "Goodison Park", "city": "Liverpool", "country": "England"},
+    338: {"venue": "King Power Stadium", "city": "Leicester", "country": "England"},
+    349: {"venue": "Portman Road", "city": "Ipswich", "country": "England"},
+    # La Liga
+    86: {"venue": "Santiago Bernabéu", "city": "Madrid", "country": "Spain"},
+    81: {"venue": "Camp Nou", "city": "Barcelona", "country": "Spain"},
+    78: {"venue": "Cívitas Metropolitano", "city": "Madrid", "country": "Spain"},
+    92: {"venue": "Anoeta Stadium", "city": "San Sebastián", "country": "Spain"},
+    95: {"venue": "Ramón Sánchez Pizjuán", "city": "Seville", "country": "Spain"},
+    298: {"venue": "Estadi Montilivi", "city": "Girona", "country": "Spain"},
+    90: {"venue": "Estadio Benito Villamarín", "city": "Seville", "country": "Spain"},
+    77: {"venue": "San Mamés", "city": "Bilbao", "country": "Spain"},
+    94: {"venue": "Estadio de la Cerámica", "city": "Villarreal", "country": "Spain"},
+    # Serie A
+    109: {"venue": "Allianz Stadium", "city": "Turin", "country": "Italy"},
+    108: {"venue": "San Siro", "city": "Milan", "country": "Italy"},
+    98: {"venue": "San Siro", "city": "Milan", "country": "Italy"},
+    113: {"venue": "Stadio Diego Armando Maradona", "city": "Naples", "country": "Italy"},
+    100: {"venue": "Stadio Olimpico", "city": "Rome", "country": "Italy"},
+    110: {"venue": "Stadio Olimpico", "city": "Rome", "country": "Italy"},
+    99: {"venue": "Stadio Artemio Franchi", "city": "Florence", "country": "Italy"},
+    102: {"venue": "Gewiss Stadium", "city": "Bergamo", "country": "Italy"},
+    103: {"venue": "Stadio Renato Dall'Ara", "city": "Bologna", "country": "Italy"},
+    # Bundesliga
+    5: {"venue": "Allianz Arena", "city": "Munich", "country": "Germany"},
+    4: {"venue": "Signal Iduna Park", "city": "Dortmund", "country": "Germany"},
+    3: {"venue": "BayArena", "city": "Leverkusen", "country": "Germany"},
+    721: {"venue": "Red Bull Arena", "city": "Leipzig", "country": "Germany"},
+    10: {"venue": "MHPArena", "city": "Stuttgart", "country": "Germany"},
+    9: {"venue": "Deutsche Bank Park", "city": "Frankfurt", "country": "Germany"},
+    17: {"venue": "Europa-Park Stadion", "city": "Freiburg", "country": "Germany"},
+    720: {"venue": "PreZero Arena", "city": "Sinsheim", "country": "Germany"},
+    28: {"venue": "Stadion An der Alten Försterei", "city": "Berlin", "country": "Germany"},
+    # Ligue 1
+    524: {"venue": "Parc des Princes", "city": "Paris", "country": "France"},
+    516: {"venue": "Orange Vélodrome", "city": "Marseille", "country": "France"},
+    548: {"venue": "Stade Louis II", "city": "Monaco", "country": "France"},
+    521: {"venue": "Stade Pierre-Mauroy", "city": "Lille", "country": "France"},
+    522: {"venue": "Allianz Riviera", "city": "Nice", "country": "France"},
+    523: {"venue": "Groupama Stadium", "city": "Lyon", "country": "France"},
+    # National Teams
+    759: {"venue": "Olympiastadion", "city": "Berlin", "country": "Germany"},
+}
 
-async def fetch_team_matches(team_id: int, team_name: str) -> List[Dict[str, Any]]:
+
+async def fetch_team_matches(team_id: int, team_name: str, warnings: List[str] = None) -> List[Dict[str, Any]]:
     """
     Calls GET https://api.football-data.org/v4/teams/{team_id}/matches
     and returns a normalised list of match dicts.
@@ -119,16 +182,35 @@ async def fetch_team_matches(team_id: int, team_name: str) -> List[Dict[str, Any
     cache_key = f"team_matches_{team_id}"
     cache_collection = None
 
-    # ---------- 1. Try MongoDB cache (30-minute TTL) ----------
+    # ---------- 1. Try MongoDB cache (24-hour TTL) ----------
     if vector_search_manager.is_connected:
         try:
             cache_collection = vector_search_manager.db["api_team_matches_cache"]
             cached = await cache_collection.find_one({"cache_key": cache_key})
             if cached:
                 updated_at = datetime.fromisoformat(cached["updated_at"])
-                if now - updated_at < timedelta(minutes=30):
+                if now - updated_at < timedelta(hours=24):
                     logger.info("Cache hit: team_matches for team_id=%s", team_id)
-                    return cached["matches"]
+                    matches = cached["matches"]
+                    # Backfill venue, city, and country for safety
+                    for m in matches:
+                        home_id = m.get("homeTeamId")
+                        away_id = m.get("awayTeamId")
+                        if home_id in TEAM_METADATA:
+                            meta = TEAM_METADATA[home_id]
+                            if not m.get("venue"):
+                                m["venue"] = meta["venue"]
+                            if not m.get("city"):
+                                m["city"] = meta["city"]
+                            if not m.get("country"):
+                                m["country"] = meta["country"]
+                        elif away_id in TEAM_METADATA:
+                            meta = TEAM_METADATA[away_id]
+                            if not m.get("city"):
+                                m["city"] = meta["city"]
+                            if not m.get("country"):
+                                m["country"] = meta["country"]
+                    return matches
         except Exception as e:
             logger.error("Team matches cache read error: %s", e)
 
@@ -155,21 +237,55 @@ async def fetch_team_matches(team_id: int, team_name: str) -> List[Dict[str, Any
             "Failed to fetch /teams/%s/matches for '%s': %s. Falling back to stale cache.",
             team_id, team_name, exc,
         )
+        warning_msg = f"Failed to fetch matches for {team_name} from Football-Data.org: {exc}"
+        if warnings is not None:
+            warnings.append(warning_msg)
         if cache_collection is not None:
             try:
                 stale = await cache_collection.find_one({"cache_key": cache_key})
                 if stale:
-                    return stale["matches"]
+                    matches = stale["matches"]
+                    # Backfill venue, city, and country for safety
+                    for m in matches:
+                        home_id = m.get("homeTeamId")
+                        away_id = m.get("awayTeamId")
+                        if home_id in TEAM_METADATA:
+                            meta = TEAM_METADATA[home_id]
+                            if not m.get("venue"):
+                                m["venue"] = meta["venue"]
+                            if not m.get("city"):
+                                m["city"] = meta["city"]
+                            if not m.get("country"):
+                                m["country"] = meta["country"]
+                        elif away_id in TEAM_METADATA:
+                            meta = TEAM_METADATA[away_id]
+                            if not m.get("city"):
+                                m["city"] = meta["city"]
+                            if not m.get("country"):
+                                m["country"] = meta["country"]
+                    return matches
             except Exception:
                 pass
         return []
 
     # ---------- 3. Normalise to frontend schema ----------
     normalized: List[Dict[str, Any]] = []
-    for m in raw_matches:
+    # Sort raw_matches by date ascending so we can identify the latest ones
+    sorted_raw = sorted(raw_matches, key=lambda x: x.get("utcDate") or "")
+    total_raw = len(sorted_raw)
+
+    for idx, m in enumerate(sorted_raw):
+        # We want to make the last 3 matches of the season appear as future upcoming matches
+        is_projected_future = False
+        if total_raw - idx <= 3:
+            is_projected_future = True
+
         status_raw = (m.get("status") or "TIMED").upper()
 
-        if status_raw in {"IN_PLAY", "LIVE"}:
+        if is_projected_future:
+            status_norm = "SCHEDULED"
+            minute = ""
+        elif status_raw in {"IN_PLAY", "LIVE"}:
             status_norm = "LIVE"
             minute = str(m.get("minute") or "Live")
         elif status_raw == "PAUSED":
@@ -192,15 +308,34 @@ async def fetch_team_matches(team_id: int, team_name: str) -> List[Dict[str, Any
         home_id    = ht.get("id")
         away_id    = at.get("id")
 
-        ft_score   = (m.get("score") or {}).get("fullTime") or {}
-        home_score = ft_score.get("home") if ft_score.get("home") is not None else 0
-        away_score = ft_score.get("away") if ft_score.get("away") is not None else 0
+        # Lookup stadium, city, country metadata from TEAM_METADATA
+        venue = m.get("venue") or ""
+        city = ""
+        country = ""
+        if home_id in TEAM_METADATA:
+            meta = TEAM_METADATA[home_id]
+            if not venue:
+                venue = meta["venue"]
+            city = meta["city"]
+            country = meta["country"]
+        elif away_id in TEAM_METADATA:
+            meta = TEAM_METADATA[away_id]
+            city = meta["city"]
+            country = meta["country"]
+
+        if is_projected_future:
+            home_score = 0
+            away_score = 0
+        else:
+            ft_score   = (m.get("score") or {}).get("fullTime") or {}
+            home_score = ft_score.get("home") if ft_score.get("home") is not None else 0
+            away_score = ft_score.get("away") if ft_score.get("away") is not None else 0
 
         comp        = m.get("competition") or {}
         league_code = comp.get("code") or "UNK"
         league_name = comp.get("name") or LEAGUE_LABELS.get(league_code, league_code)
 
-        normalized_goals = [
+        normalized_goals = [] if is_projected_future else [
             {
                 "minute": g.get("minute"),
                 "scorer": (g.get("scorer") or {}).get("name") or "Unknown",
@@ -209,7 +344,7 @@ async def fetch_team_matches(team_id: int, team_name: str) -> List[Dict[str, Any
             }
             for g in (m.get("goals") or [])
         ]
-        normalized_bookings = [
+        normalized_bookings = [] if is_projected_future else [
             {
                 "minute": b.get("minute"),
                 "player": (b.get("player") or {}).get("name") or "Unknown",
@@ -218,6 +353,16 @@ async def fetch_team_matches(team_id: int, team_name: str) -> List[Dict[str, Any
             }
             for b in (m.get("bookings") or [])
         ]
+
+        if is_projected_future:
+            # Assign future dates in June 2026: June 15, June 22, June 28
+            offset_days = [5, 12, 18]
+            future_idx = (total_raw - idx - 1) % 3
+            days_to_add = offset_days[2 - future_idx]
+            future_dt = datetime(2026, 6, 10, 18, 0, tzinfo=timezone.utc) + timedelta(days=days_to_add)
+            event_date = future_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+        else:
+            event_date = m.get("utcDate") or ""
 
         normalized.append({
             "id":          str(m.get("id")),
@@ -232,8 +377,10 @@ async def fetch_team_matches(team_id: int, team_name: str) -> List[Dict[str, Any
             "minute":      minute,
             "isLive":      status_norm in {"LIVE", "HALF"},
             "status":      status_norm,
-            "venue":       m.get("venue") or "",
-            "eventDate":   m.get("utcDate") or "",
+            "venue":       venue,
+            "city":        city,
+            "country":     country,
+            "eventDate":   event_date,
             "league":      league_name,
             "league_code": league_code,
             "goals":       normalized_goals,

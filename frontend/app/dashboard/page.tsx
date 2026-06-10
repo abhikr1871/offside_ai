@@ -267,6 +267,9 @@ export default function DashboardPage() {
   const [selectedArchStep, setSelectedArchStep] = useState<string>("langgraph");
   const [selectedService, setSelectedService] = useState<string>("hostel");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [assistantSelectedMapPlace, setAssistantSelectedMapPlace] = useState<string | null>(null);
+  const [assistantSelectedStay, setAssistantSelectedStay] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Journey planner state
   const [journeyStep, setJourneyStep] = useState<number>(1);
@@ -477,7 +480,7 @@ export default function DashboardPage() {
       const r = await fetch(`${BACKEND}/api/v1/agent/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, query }),
+        body: JSON.stringify({ email, query, lodging: assistantSelectedStay }),
       });
       const data = await r.json();
       const toolsCalled: string[] = (data.tool_calls || []).map((t: { name: string }) => t.name);
@@ -490,6 +493,84 @@ export default function DashboardPage() {
         else if (toolsCalled.includes("get_team_matches")) setSelectedService("match");
       }
       setTimeout(() => setActiveMcpTools([]), 6000);
+
+      // Extract locations from action_details to auto-focus map
+      if (data.action_details && Array.isArray(data.action_details)) {
+        for (const detail of data.action_details) {
+          if (detail.status === "success") {
+            if (detail.stays && detail.stays.length > 0) {
+              const firstStay = detail.stays[0];
+              setAssistantSelectedStay(firstStay.name);
+              setAssistantSelectedMapPlace(firstStay.name);
+            } else if (detail.routes && detail.routes.length > 0) {
+              setAssistantSelectedMapPlace(journeyStadium || "Emirates Stadium");
+            } else if (detail.reviews) {
+              if (detail.venue) {
+                setAssistantSelectedMapPlace(detail.venue);
+              }
+            }
+          }
+        }
+      }
+
+      setMessages(prev => [...prev, {
+        sender: "agent",
+        text: data.reply,
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        toolCalls: data.tool_calls,
+      }]);
+    } catch {
+      setMessages(prev => [...prev, {
+        sender: "agent",
+        text: "⚠️ **Agent connection interrupted.** Please ensure the backend server is online.",
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      }]);
+    } finally { setSending(false); }
+  };
+
+  const handleSendDirectQuery = async (queryText: string) => {
+    if (!queryText.trim() || !email || sending) return;
+    setSending(true);
+    const ts = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    setMessages(prev => [...prev, { sender: "user", text: queryText, timestamp: ts }]);
+
+    try {
+      const r = await fetch(`${BACKEND}/api/v1/agent/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, query: queryText, lodging: assistantSelectedStay }),
+      });
+      const data = await r.json();
+      const toolsCalled: string[] = (data.tool_calls || []).map((t: { name: string }) => t.name);
+      setActiveMcpTools(toolsCalled);
+      if (toolsCalled.length) {
+        setSelectedArchStep("mcp-server");
+        if (toolsCalled.includes("search_hostels") || toolsCalled.includes("search_stays")) setSelectedService("hostel");
+        else if (toolsCalled.includes("get_directions")) setSelectedService("route");
+        else if (toolsCalled.includes("get_food_reviews")) setSelectedService("review");
+        else if (toolsCalled.includes("get_team_matches")) setSelectedService("match");
+      }
+      setTimeout(() => setActiveMcpTools([]), 6000);
+
+      // Extract locations from action_details to auto-focus map
+      if (data.action_details && Array.isArray(data.action_details)) {
+        for (const detail of data.action_details) {
+          if (detail.status === "success") {
+            if (detail.stays && detail.stays.length > 0) {
+              const firstStay = detail.stays[0];
+              setAssistantSelectedStay(firstStay.name);
+              setAssistantSelectedMapPlace(firstStay.name);
+            } else if (detail.routes && detail.routes.length > 0) {
+              setAssistantSelectedMapPlace(journeyStadium || "Emirates Stadium");
+            } else if (detail.reviews) {
+              if (detail.venue) {
+                setAssistantSelectedMapPlace(detail.venue);
+              }
+            }
+          }
+        }
+      }
+
       setMessages(prev => [...prev, {
         sender: "agent",
         text: data.reply,
@@ -834,115 +915,276 @@ export default function DashboardPage() {
     </>
   );
 
-  const renderAssistant = () => (
-    <div style={{ display: "flex", gap: "1.25rem", height: "calc(100vh - 180px)", minHeight: 500 }}>
-      {/* Left: Architecture panel */}
-      <div style={{ width: 240, flexShrink: 0, display: "flex", flexDirection: "column", gap: "1rem" }}>
-        <div className="glass-card arch-panel">
-          <div className="section-label">Agent Flow</div>
-          <div className="arch-flow">
-            {["frontend", "langgraph", "mcp-client", "mcp-server"].map((step, i) => {
-              const labels = ["Frontend UI", "LangGraph Agent", "MCP Client", "MCP Tool Server"];
-              const isActive = selectedArchStep === step || (step === "mcp-server" && activeMcpTools.length > 0);
+  const renderAssistant = () => {
+    const renderAssistantMd = (text: string) => {
+      return text.split("\n").map((line, i) => {
+        if (line.startsWith("### ")) return <h3 key={i} className="text-sm font-bold text-emerald-400 mt-2 mb-1 uppercase tracking-wider">{line.slice(4)}</h3>;
+        if (line.startsWith("#### ")) return <h4 key={i} className="text-xs font-bold text-zinc-300 mt-1.5 mb-1 uppercase tracking-wider">{line.slice(5)}</h4>;
+        
+        const renderLineParts = (partText: string) => {
+          if (!partText.includes("**")) return partText;
+          const parts = partText.split("**");
+          return parts.map((p, j) => {
+            if (j % 2 === 1) {
               return (
-                <div key={step} className={`arch-node ${isActive ? "active" : ""}`} onClick={() => setSelectedArchStep(step)}>
-                  <div className="arch-dot" />
-                  <span style={{ fontSize: "0.75rem" }}>{labels[i]}</span>
-                </div>
+                <button
+                  key={j}
+                  type="button"
+                  onClick={() => {
+                    setAssistantSelectedMapPlace(p);
+                  }}
+                  className="font-bold text-emerald-400 hover:text-emerald-300 hover:underline inline-flex items-center gap-1 bg-emerald-500/10 hover:bg-emerald-500/20 px-2 py-0.5 rounded cursor-pointer transition-all border-none align-baseline text-left font-sans text-xs"
+                >
+                  📍 {p}
+                </button>
               );
-            })}
-          </div>
-        </div>
+            }
+            return p;
+          });
+        };
 
-        <div className="glass-card arch-panel" style={{ flexGrow: 1 }}>
-          <div className="section-label">MCP Services</div>
-          <div className="service-list">
-            {MCP_SERVICES.map(s => {
-              const toolKey = s.id === "hostel" ? "search_hostels" : s.id === "route" ? "get_directions" : s.id === "review" ? "get_food_reviews" : "get_team_matches";
-              const isActive = activeMcpTools.includes(toolKey);
-              return (
-                <div key={s.id} className={`service-item ${selectedService === s.id ? "active" : ""} ${isActive ? "active" : ""}`} onClick={() => setSelectedService(s.id)}>
-                  <div className="service-item-name">
-                    {s.name}
-                    {isActive && <span style={{ marginLeft: 6, fontSize: "0.6rem", background: "#10b981", color: "white", padding: "1px 5px", borderRadius: 3 }}>LIVE</span>}
-                  </div>
-                  <div className="service-item-tool">{s.tool}</div>
-                </div>
-              );
-            })}
-          </div>
-          {selectedService && (
-            <div className="service-detail-drawer">
-              {MCP_SERVICES.find(s => s.id === selectedService)?.desc}
+        if (line.trim().startsWith("- ")) {
+          return (
+            <li key={i} className="ml-4 list-disc text-xs text-zinc-300 my-1">
+              {renderLineParts(line.trim().slice(2))}
+            </li>
+          );
+        }
+
+        return line.trim() ? (
+          <p key={i} className="text-xs text-zinc-300 my-1.5 leading-relaxed">
+            {renderLineParts(line)}
+          </p>
+        ) : (
+          <div key={i} className="h-1.5" />
+        );
+      });
+    };
+
+    const SUGGESTION_QUERIES = [
+      { label: "🏨 Find Stays", query: "Find cheap stays near Emirates Stadium" },
+      { label: "⚽ Match Fixtures", query: "Show upcoming matches for Arsenal" },
+      { label: "🍺 Food & Pubs", query: "Best pubs and food reviews near Anfield" },
+      { label: "🚶 Route & Directions", query: "Show transit directions from London to Emirates Stadium" },
+    ];
+
+    const getMapUrl = () => {
+      const defaultStadium = userProfile?.stadium || "Emirates Stadium";
+      const defaultCity = userProfile?.city || "London";
+      
+      let origin = "";
+      if (assistantSelectedStay) {
+        origin = assistantSelectedStay;
+      } else if (userProfile?.street && userProfile?.city) {
+        origin = `${userProfile.street}, ${userProfile.city}`;
+      } else if (userProfile?.city) {
+        origin = userProfile.city;
+      } else {
+        origin = "London";
+      }
+
+      if (assistantSelectedMapPlace) {
+        if (origin && origin.toLowerCase() !== assistantSelectedMapPlace.toLowerCase()) {
+          return `https://maps.google.com/maps?saddr=${encodeURIComponent(origin)}&daddr=${encodeURIComponent(assistantSelectedMapPlace)}&t=&z=14&ie=UTF8&iwloc=&output=embed`;
+        }
+        return `https://maps.google.com/maps?q=${encodeURIComponent(assistantSelectedMapPlace)}&t=&z=14&ie=UTF8&iwloc=&output=embed`;
+      }
+      
+      return `https://maps.google.com/maps?q=${encodeURIComponent(defaultStadium + " " + defaultCity)}&t=&z=14&ie=UTF8&iwloc=&output=embed`;
+    };
+
+    return (
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 h-[calc(100vh-190px)] min-h-[600px] w-full text-white">
+        {/* Left Column: Chat terminal */}
+        <div className="lg:col-span-5 flex flex-col h-full glass-card agent-terminal overflow-hidden border border-zinc-800/80 bg-zinc-950/20 rounded-2xl">
+          <div className="terminal-header flex items-center justify-between border-b border-zinc-800/80 px-4 py-3 bg-zinc-900/40">
+            <div className="terminal-title flex items-center gap-2">
+              <span className="terminal-dot w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-400 font-mono">
+                Globus 2026 — Assistant Terminal
+              </span>
             </div>
-          )}
-        </div>
-      </div>
-
-      {/* Right: Chat terminal */}
-      <div className="glass-card agent-terminal" style={{ flex: 1 }}>
-        <div className="terminal-header">
-          <div className="terminal-title">
-            <span className="terminal-dot" />
-            <span style={{ fontSize: "0.75rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.1em", color: "#10b981" }}>
-              Globus 2026 — Agent Terminal
+            <span className="text-[9px] font-mono text-zinc-500 uppercase tracking-wider">
+              ONLINE
             </span>
           </div>
-          <span style={{ fontSize: "0.65rem", fontFamily: "monospace", color: "var(--text-secondary)", opacity: 0.5 }}>NODE STATUS: ACTIVE</span>
-        </div>
 
-        <div className="terminal-messages">
-          {messages.map((msg, i) => (
-            <div key={i} className={`msg-bubble ${msg.sender}`}>
-              {msg.sender === "agent" ? (
-                <>
-                  {renderMd(msg.text)}
-                  {msg.toolCalls && msg.toolCalls.length > 0 && (
-                    <div className="tool-calls-panel">
-                      <div style={{ fontWeight: 700, color: "var(--text-secondary)", opacity: 0.6, marginBottom: 4, fontSize: "0.68rem" }}>⚡ Tool calls</div>
-                      {msg.toolCalls.map((tc, ti) => (
-                        <div key={ti} className="tool-call-item">{tc.name}({JSON.stringify(tc.arguments)})</div>
-                      ))}
-                    </div>
-                  )}
-                </>
-              ) : (
-                <p>{msg.text}</p>
-              )}
-              <span className="msg-timestamp">{msg.timestamp}</span>
-            </div>
-          ))}
-          {sending && (
-            <div className="msg-bubble agent">
-              <div className="typing-dots">
-                <div className="typing-dot" />
-                <div className="typing-dot" />
-                <div className="typing-dot" />
+          <div className="terminal-messages flex-grow overflow-y-auto p-4 flex flex-col gap-4">
+            {messages.map((msg, i) => (
+              <div key={i} className={`msg-bubble ${msg.sender} max-w-[85%] rounded-xl p-3 text-xs leading-relaxed ${
+                msg.sender === "user" 
+                  ? "self-end bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-br-none" 
+                  : "self-start bg-zinc-900/60 border border-zinc-800/60 text-zinc-300 rounded-bl-none"
+              }`}>
+                {msg.sender === "agent" ? (
+                  <>
+                    {renderAssistantMd(msg.text)}
+                    {msg.toolCalls && msg.toolCalls.length > 0 && (
+                      <div className="tool-calls-panel mt-3 pt-2 border-t border-zinc-800/80 font-mono text-[10px] text-emerald-400">
+                        <div className="font-bold text-zinc-500 mb-1">⚡ MCP Tool Actions</div>
+                        {msg.toolCalls.map((tc, ti) => (
+                          <div key={ti} className="bg-zinc-950/40 border border-zinc-800/30 rounded px-2 py-1 mt-1 text-[9px]">
+                            {tc.name}({JSON.stringify(tc.arguments)})
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p>{msg.text}</p>
+                )}
+                <span className="msg-timestamp block text-[9px] text-zinc-500 mt-1.5 text-right font-mono">
+                  {msg.timestamp}
+                </span>
               </div>
+            ))}
+
+            {/* Empty chat suggestions onboarding board */}
+            {messages.length <= 1 && (
+              <div className="mt-2 border border-zinc-800/40 bg-zinc-900/10 rounded-xl p-3">
+                <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-2">
+                  Suggestions to ask Globus:
+                </div>
+                <div className="grid grid-cols-1 gap-2">
+                  {SUGGESTION_QUERIES.map((sq, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => handleSendDirectQuery(sq.query)}
+                      className="w-full text-left bg-zinc-900/40 hover:bg-zinc-900/80 border border-zinc-800/50 hover:border-emerald-500/40 rounded-xl p-2.5 text-xs text-zinc-300 hover:text-white transition-all cursor-pointer flex items-center justify-between"
+                    >
+                      <span>{sq.query}</span>
+                      <span className="text-emerald-400">→</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {sending && (
+              <div className="msg-bubble agent self-start bg-zinc-900/60 border border-zinc-800/60 rounded-xl p-3 text-xs rounded-bl-none">
+                <div className="flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                  <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                  <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                </div>
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+
+          <form className="terminal-input border-t border-zinc-800/80 p-3 bg-zinc-900/20" onSubmit={handleSendMessage}>
+            {/* Horizontal suggestions chips above input box */}
+            <div className="flex gap-1.5 overflow-x-auto pb-2 mb-2 scrollbar-none">
+              {SUGGESTION_QUERIES.map((sq, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => handleSendDirectQuery(sq.query)}
+                  className="flex-shrink-0 bg-zinc-900/60 hover:bg-zinc-800/80 border border-zinc-800/80 hover:border-emerald-500/40 text-[10px] text-zinc-300 hover:text-white px-2.5 py-1 rounded-full transition-all cursor-pointer"
+                >
+                  {sq.label}
+                </button>
+              ))}
             </div>
-          )}
-          <div ref={messagesEndRef} />
+            <div className="flex gap-2">
+              <input
+                ref={inputRef}
+                className="terminal-input-field flex-grow bg-zinc-900/50 border border-zinc-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-xl px-3 py-2 text-xs text-white outline-none transition-all"
+                placeholder="Ask about nearest stays, directions, food spots..."
+                value={inputVal}
+                onChange={e => setInputVal(e.target.value)}
+                disabled={sending}
+              />
+              <button
+                type="submit"
+                className="bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl px-3 py-2 flex items-center justify-center gap-1 text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                disabled={!inputVal.trim() || sending}
+              >
+                Send
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
+                </svg>
+              </button>
+            </div>
+          </form>
         </div>
 
-        <form className="terminal-input" onSubmit={handleSendMessage}>
-          <input
-            className="terminal-input-field"
-            placeholder="Ask about hostels, directions, food spots, or fixtures..."
-            value={inputVal}
-            onChange={e => setInputVal(e.target.value)}
-            disabled={sending}
-            autoFocus
-          />
-          <button type="submit" className="terminal-send-btn" disabled={!inputVal.trim() || sending}>
-            Send
-            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
-            </svg>
-          </button>
-        </form>
+        {/* Right Column: Connected Map Hub */}
+        <div className="lg:col-span-7 flex flex-col h-full glass-card border border-zinc-800/80 bg-zinc-950/20 p-4 rounded-2xl overflow-hidden">
+          <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3 mb-3">
+            <div>
+              <h2 className="text-xs font-extrabold uppercase tracking-wider text-emerald-400 font-mono flex items-center gap-1.5">
+                <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.446 1.202-.832a2.25 2.25 0 0 0 .896-1.802V4.77a2.25 2.25 0 0 0-3.344-1.948l-2.705 1.503a1.125 1.125 0 0 1-1.012 0L7.13 2.822a2.25 2.25 0 0 0-3.344 1.948v11.758a2.25 2.25 0 0 0 .896 1.802l1.2 1.2a2.25 2.25 0 0 0 2.534-.148l2.705-1.503a1.125 1.125 0 0 1 1.012 0l2.705 1.503Z" />
+                </svg>
+                Live Assistant Map Hub
+              </h2>
+              <p className="text-[10px] text-zinc-500 font-mono mt-0.5">Connected GPS tracking via MCP</p>
+            </div>
+            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded px-2 py-0.5 text-[9px] text-emerald-400 font-mono tracking-wider animate-pulse uppercase">
+              GPS STATUS: ACTIVE
+            </div>
+          </div>
+
+          {/* Lodging & Search Info Overlay */}
+          <div className="flex flex-col md:flex-row gap-2.5 items-stretch md:items-center justify-between bg-zinc-900/40 border border-zinc-800/80 rounded-xl p-3 mb-3 text-xs">
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-1.5">
+                <span className="text-zinc-500 font-semibold text-[10px] uppercase tracking-wider font-mono">Your Lodging Stay:</span>
+                {assistantSelectedStay ? (
+                  <span className="text-emerald-400 font-bold flex items-center gap-1">
+                    🏨 {assistantSelectedStay}
+                  </span>
+                ) : (
+                  <span className="text-zinc-500 italic">None selected. Click stay name in chat to set.</span>
+                )}
+              </div>
+              {assistantSelectedMapPlace && (
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className="text-zinc-500 font-semibold text-[10px] uppercase tracking-wider font-mono">Map Target:</span>
+                  <span className="text-zinc-300 font-medium">📍 {assistantSelectedMapPlace}</span>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {assistantSelectedMapPlace && assistantSelectedMapPlace !== assistantSelectedStay && (
+                <button
+                  onClick={() => setAssistantSelectedStay(assistantSelectedMapPlace)}
+                  className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 px-2.5 py-1 rounded-lg text-[10px] font-semibold cursor-pointer transition-all flex items-center gap-1"
+                >
+                  Set as Lodging Stay
+                </button>
+              )}
+              {(assistantSelectedMapPlace || assistantSelectedStay) && (
+                <button
+                  onClick={() => {
+                    setAssistantSelectedMapPlace(null);
+                    setAssistantSelectedStay(null);
+                  }}
+                  className="bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white border border-zinc-700 px-2 py-1 rounded-lg text-[10px] cursor-pointer transition-all"
+                >
+                  Reset Map
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Map Frame */}
+          <div className="relative flex-1 rounded-xl overflow-hidden border border-zinc-800/80 bg-zinc-900/20 min-h-[300px]">
+            <iframe
+              title="Globus Assistant Map"
+              src={getMapUrl()}
+              className="w-full h-full border-none opacity-90 hover:opacity-100 transition-opacity"
+              allowFullScreen
+              loading="lazy"
+            />
+            {/* Cyberpunk Scanner Overlays */}
+            <div className="absolute inset-0 pointer-events-none border border-emerald-500/5 rounded-xl" />
+          </div>
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderPlaceholder = (title: string, desc: string, icon: React.ReactNode) => (
     <div className="placeholder-tab">
