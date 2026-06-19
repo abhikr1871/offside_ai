@@ -16,11 +16,13 @@ export default function AuthForm({ mode }: AuthFormProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const isSignup = mode === "signup";
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError("");
+    setLoading(true);
 
     try {
       if (isSignup) {
@@ -33,6 +35,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
+      setLoading(false);
     }
   };
 
@@ -202,8 +205,21 @@ export default function AuthForm({ mode }: AuthFormProps) {
 
             {error && <div className="auth-error">{error}</div>}
 
-            <button className="auth-submit" type="submit">
-              {isSignup ? "Create Account" : "Login"}
+            <button
+              className="auth-submit flex items-center justify-center gap-2 cursor-pointer"
+              type="submit"
+              disabled={loading}
+            >
+              {loading ? (
+                <>
+                  <span className="w-1.5 h-1.5 bg-white rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                  <span className="w-1.5 h-1.5 bg-white rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                  <span className="w-1.5 h-1.5 bg-white rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                  <span>{isSignup ? "Creating..." : "Logging in..."}</span>
+                </>
+              ) : (
+                isSignup ? "Create Account" : "Login"
+              )}
             </button>
           </form>
 

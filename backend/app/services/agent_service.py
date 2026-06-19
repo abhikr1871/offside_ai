@@ -115,6 +115,10 @@ class AgentService:
         self.vertex_initialized = False
         self.llm_model = None
 
+        from dotenv import load_dotenv
+        env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env")
+        load_dotenv(dotenv_path=env_path, override=True)
+
         api_key = os.getenv("GEMINI_API_KEY")
         model_name = os.getenv("GEMINI_MODEL_NAME", "gemini-1.5-flash")
         if HAS_GENAI and api_key:

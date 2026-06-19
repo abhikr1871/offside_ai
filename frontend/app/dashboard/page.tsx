@@ -259,6 +259,31 @@ export default function DashboardPage() {
   const [tickets, setTickets] = useState<TicketDocument[]>([]);
   const [ticketsLoading, setTicketsLoading] = useState(false);
 
+  // Ticketing Seating & Pricing Intelligence States
+  const [ticketSelectedMatchId, setTicketSelectedMatchId] = useState<string | null>(null);
+  const [ticketAvailabilityError, setTicketAvailabilityError] = useState<string | null>(null);
+  const [ticketAvailabilityData, setTicketAvailabilityData] = useState<any | null>(null);
+  const [ticketAvailabilityLoading, setTicketAvailabilityLoading] = useState<boolean>(false);
+  const [ticketForecastingData, setTicketForecastingData] = useState<any | null>(null);
+  const [ticketForecastingLoading, setTicketForecastingLoading] = useState<boolean>(false);
+  const [isCustomTicketSearch, setIsCustomTicketSearch] = useState<boolean>(false);
+  const [customTicketQuery, setCustomTicketQuery] = useState<string>("");
+  const [customHomeQuery, setCustomHomeQuery] = useState<string>("");
+  const [customAwayQuery, setCustomAwayQuery] = useState<string>("");
+  const [customTicketDate, setCustomTicketDate] = useState<string>("");
+  const [customSelectedMatch, setCustomSelectedMatch] = useState<MatchDocument | null>(null);
+  const [isSearchingCustomTicket, setIsSearchingCustomTicket] = useState<boolean>(false);
+
+  // Match Analysis states
+  const [analysisSelectedMatchId, setAnalysisSelectedMatchId] = useState<string | null>(null);
+  const [analysisMatchDetail, setAnalysisMatchDetail] = useState<any | null>(null);
+  const [analysisLoading, setAnalysisLoading] = useState<boolean>(false);
+  const [analysisAILoading, setAnalysisAILoading] = useState<boolean>(false);
+  const [analysisAIData, setAnalysisAIData] = useState<any | null>(null);
+  const [analysisAIError, setAnalysisAIError] = useState<string | null>(null);
+  const [isCustomAnalysisPrompt, setIsCustomAnalysisPrompt] = useState<boolean>(false);
+  const [customAnalysisPromptQuery, setCustomAnalysisPromptQuery] = useState<string>("");
+
   // Agent chat state
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputVal, setInputVal] = useState("");
@@ -276,6 +301,11 @@ export default function DashboardPage() {
   const [journeyMatchName, setJourneyMatchName] = useState<string>("");
   const [journeyMatchDate, setJourneyMatchDate] = useState<string>("");
   const [journeyStadium, setJourneyStadium] = useState<string>("Emirates Stadium");
+  const [stadiumSearchQuery, setStadiumSearchQuery] = useState<string>("Emirates Stadium");
+  const [stadiumSuggestions, setStadiumSuggestions] = useState<any[]>([]);
+  const [isSearchingStadiums, setIsSearchingStadiums] = useState<boolean>(false);
+  const [showStadiumDropdown, setShowStadiumDropdown] = useState<boolean>(false);
+  const stadiumRef = useRef<HTMLDivElement>(null);
   const [journeyMaxPrice, setJourneyMaxPrice] = useState<number>(120);
   const [journeyAccommodationType, setJourneyAccommodationType] = useState<string>("all");
   const [journeyAmenities, setJourneyAmenities] = useState<string[]>([]);
@@ -396,6 +426,76 @@ export default function DashboardPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, sending]);
 
+  // ── Stadium Search & Suggestions ──────────────────────────────────────────
+  const POPULAR_STADIUMS = [
+    "Emirates Stadium",
+    "Anfield",
+    "Old Trafford",
+    "Stamford Bridge",
+    "Etihad Stadium",
+    "Tottenham Hotspur Stadium",
+    "Wembley Stadium",
+    "Santiago Bernabéu",
+    "Camp Nou",
+    "Allianz Arena",
+    "Parc des Princes",
+    "San Siro",
+    "Signal Iduna Park",
+    "Johan Cruyff Arena"
+  ];
+
+  const filteredPopularStadiums = POPULAR_STADIUMS.filter(name =>
+    name.toLowerCase().includes(stadiumSearchQuery.toLowerCase())
+  );
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (stadiumRef.current && !stadiumRef.current.contains(event.target as Node)) {
+        setShowStadiumDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    if (!stadiumSearchQuery.trim()) {
+      setStadiumSuggestions([]);
+      return;
+    }
+
+    if (stadiumSearchQuery === journeyStadium) {
+      return;
+    }
+
+    const delayDebounce = setTimeout(async () => {
+      setIsSearchingStadiums(true);
+      try {
+        const hasStadiumKeyword = stadiumSearchQuery.toLowerCase().includes("stadium") || 
+                                  stadiumSearchQuery.toLowerCase().includes("arena") || 
+                                  stadiumSearchQuery.toLowerCase().includes("park") || 
+                                  stadiumSearchQuery.toLowerCase().includes("estadio") || 
+                                  stadiumSearchQuery.toLowerCase().includes("stade") ||
+                                  stadiumSearchQuery.toLowerCase().includes("camp") ||
+                                  stadiumSearchQuery.toLowerCase().includes("siro") ||
+                                  stadiumSearchQuery.toLowerCase().includes("trafford") ||
+                                  stadiumSearchQuery.toLowerCase().includes("bridge");
+        const query = encodeURIComponent(stadiumSearchQuery + (hasStadiumKeyword ? "" : " stadium"));
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=5`);
+        if (res.ok) {
+          const data = await res.json();
+          setStadiumSuggestions(data);
+        }
+      } catch (e) {
+        console.error("Nominatim fetch failed", e);
+      } finally {
+        setIsSearchingStadiums(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(delayDebounce);
+  }, [stadiumSearchQuery, journeyStadium]);
+
   // ── Handlers ───────────────────────────────────────────────────────────────
 
   const handlePlanJourneyForMatch = (match: MatchDocument) => {
@@ -403,6 +503,7 @@ export default function DashboardPage() {
     setJourneyMatchName(`${match.homeTeam} vs ${match.awayTeam}`);
     setJourneyMatchDate(matchDateStr);
     setJourneyStadium(match.venue || "Emirates Stadium");
+    setStadiumSearchQuery(match.venue || "Emirates Stadium");
 
     if (matchDateStr) {
       setJourneyCheckIn(matchDateStr);
@@ -423,6 +524,7 @@ export default function DashboardPage() {
     setJourneyMatchName(`${ticket.home_team} vs ${ticket.away_team}`);
     setJourneyMatchDate(matchDateStr);
     setJourneyStadium(ticket.venue || "Emirates Stadium");
+    setStadiumSearchQuery(ticket.venue || "Emirates Stadium");
 
     if (matchDateStr) {
       setJourneyCheckIn(matchDateStr);
@@ -466,6 +568,187 @@ export default function DashboardPage() {
     } catch { }
     finally { setBookingInProgress(null); }
   };
+
+  const handleCheckAvailability = async (match: MatchDocument) => {
+    setTicketAvailabilityLoading(true);
+    setTicketAvailabilityError(null);
+    setTicketAvailabilityData(null);
+    try {
+      const matchName = `${match.homeTeam} vs ${match.awayTeam}`;
+      const r = await fetch(`${BACKEND}/api/v1/tickets/availability?match_name=${encodeURIComponent(matchName)}`);
+      const data = await r.json();
+      if (!r.ok) {
+        setTicketAvailabilityError(data.detail || "Failed to check ticket availability.");
+      } else {
+        setTicketAvailabilityData(data);
+      }
+    } catch (exc: any) {
+      setTicketAvailabilityError(exc?.message || "Failed to check ticket availability.");
+    } finally {
+      setTicketAvailabilityLoading(false);
+    }
+  };
+
+  const handleRunAISeatingForecast = async (match: MatchDocument) => {
+    setTicketForecastingLoading(true);
+    setTicketForecastingData(null);
+    try {
+      const matchName = `${match.homeTeam} vs ${match.awayTeam}`;
+      const r = await fetch(`${BACKEND}/api/v1/tickets/predict`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          match_name: matchName,
+          match_date: match.eventDate || "",
+          venue: match.venue || "Unknown Venue"
+        })
+      });
+      const data = await r.json();
+      if (r.ok) {
+        setTicketForecastingData(data);
+      }
+    } catch {
+    } finally {
+      setTicketForecastingLoading(false);
+    }
+  };
+
+  const handleSearchCustomTicketMatch = async () => {
+    const combinedQuery = `${customHomeQuery.trim()} vs ${customAwayQuery.trim()}`;
+    if (!customHomeQuery.trim() || !customAwayQuery.trim()) return;
+    setIsSearchingCustomTicket(true);
+    setTicketAvailabilityError(null);
+    setTicketAvailabilityData(null);
+    setTicketForecastingData(null);
+    setCustomSelectedMatch(null);
+    try {
+      const query = encodeURIComponent(combinedQuery);
+      const date = encodeURIComponent(customTicketDate);
+      const res = await fetch(`${BACKEND}/api/v1/tickets/custom-match?query=${query}&date=${date}`);
+      if (res.ok) {
+        const matchData = await res.json();
+        setCustomSelectedMatch(matchData);
+        setTicketSelectedMatchId(matchData.id);
+        
+        // Auto-correct spelling in inputs
+        setCustomHomeQuery(matchData.homeTeam);
+        setCustomAwayQuery(matchData.awayTeam);
+        
+        handleCheckAvailability(matchData);
+        handleRunAISeatingForecast(matchData);
+      } else {
+        const err = await res.json();
+        setTicketAvailabilityError(err.detail || "Failed to search custom match.");
+      }
+    } catch (e: any) {
+      setTicketAvailabilityError(e?.message || "Failed to connect to search service.");
+    } finally {
+      setIsSearchingCustomTicket(false);
+    }
+  };
+
+  const handleSelectMatch = (matchId: string) => {
+    setCustomSelectedMatch(null);
+    setTicketSelectedMatchId(matchId);
+    setTicketForecastingData(null);
+    setTicketAvailabilityError(null);
+    setTicketAvailabilityData(null);
+    
+    if (matchId) {
+      const match = followedMatches.find(m => m.id === matchId);
+      if (match) {
+        handleCheckAvailability(match);
+      }
+    }
+  };
+
+  const handleSelectAnalysisMatch = async (matchId: string) => {
+    setAnalysisSelectedMatchId(matchId);
+    setAnalysisMatchDetail(null);
+    setAnalysisAIData(null);
+    setAnalysisAIError(null);
+    
+    if (!matchId) return;
+    
+    setAnalysisLoading(true);
+    try {
+      const r = await fetch(`${BACKEND}/api/v1/live-matches/match/${matchId}`);
+      if (r.ok) {
+        const data = await r.json();
+        setAnalysisMatchDetail(data);
+      } else {
+        setAnalysisAIError("Failed to load match details statistics.");
+      }
+    } catch (exc: any) {
+      setAnalysisAIError(exc?.message || "Failed to load match details statistics.");
+    } finally {
+      setAnalysisLoading(false);
+    }
+  };
+
+  const handleGenerateTacticalBreakdownForMatch = async (matchData: any) => {
+    setAnalysisAILoading(true);
+    setAnalysisAIError(null);
+    setAnalysisAIData(null);
+    
+    try {
+      const r = await fetch(`${BACKEND}/api/v1/analysis/tactical`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ match_data: matchData })
+      });
+      
+      if (r.ok) {
+        const data = await r.json();
+        setAnalysisAIData(data);
+      } else {
+        const errData = await r.json();
+        setAnalysisAIError(errData.detail || "Failed to generate AI tactical report.");
+      }
+    } catch (exc: any) {
+      setAnalysisAIError(exc?.message || "Failed to generate AI tactical report.");
+    } finally {
+      setAnalysisAILoading(false);
+    }
+  };
+
+  const handleGenerateTacticalBreakdown = async () => {
+    if (!analysisMatchDetail) return;
+    await handleGenerateTacticalBreakdownForMatch(analysisMatchDetail);
+  };
+
+  const handleSearchAnalysisMatchByPrompt = async () => {
+    if (!customAnalysisPromptQuery.trim()) return;
+    setAnalysisLoading(true);
+    setAnalysisAIError(null);
+    setAnalysisAIData(null);
+    setAnalysisMatchDetail(null);
+    
+    try {
+      const res = await fetch(`${BACKEND}/api/v1/analysis/prompt-search`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: customAnalysisPromptQuery })
+      });
+      
+      if (res.ok) {
+        const matchData = await res.json();
+        setAnalysisMatchDetail(matchData);
+        setAnalysisSelectedMatchId(matchData.id);
+        
+        // Automatically trigger breakdown
+        handleGenerateTacticalBreakdownForMatch(matchData);
+      } else {
+        const err = await res.json();
+        setAnalysisAIError(err.detail || "Failed to find match from prompt.");
+      }
+    } catch (e: any) {
+      setAnalysisAIError(e?.message || "Failed to connect to search service.");
+    } finally {
+      setAnalysisLoading(false);
+    }
+  };
+
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -611,6 +894,7 @@ export default function DashboardPage() {
           setJourneyMatchName(data.matchName || "");
           setJourneyMatchDate(data.matchDate || "");
           setJourneyStadium(data.stadium || "");
+          setStadiumSearchQuery(data.stadium || "");
           setJourneySelectedStay(data.selectedStay || null);
           setJourneySelectedStayReason(data.selectedStayReason || "");
           setJourneySelectedRoute(data.selectedRoute || data.routes?.[0] || null);
@@ -841,79 +1125,856 @@ export default function DashboardPage() {
     </>
   );
 
-  const renderTickets = () => (
-    <>
-      <div className="flex items-center justify-between mb-5">
-        <div>
-          <div className="section-label">My Booked Tickets</div>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            All confirmed match bookings for your account
-          </p>
-        </div>
-        <button
-          onClick={() => email && fetchTickets(email)}
-          className="text-xs font-bold text-emerald-500 hover:underline cursor-pointer"
-        >
-          Refresh
-        </button>
-      </div>
+  const renderTickets = () => {
+    const upcomingMatches = followedMatches.filter(m => m.status !== "FT");
+    const activeMatch = customSelectedMatch || followedMatches.find(m => m.id === ticketSelectedMatchId);
 
-      {ticketsLoading ? (
-        <div className="tickets-grid">
-          {[1, 2, 3].map(i => <div key={i} className="loading-shimmer shimmer-card" />)}
-        </div>
-      ) : tickets.length === 0 ? (
-        <div className="empty-state">
-          <svg width="42" height="42" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 0 1 0 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 0 1 0-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375Z" />
-          </svg>
-          <p className="text-sm font-semibold">No tickets booked yet.</p>
-          <p className="text-xs">Go to Dashboard and click <strong>Book Ticket</strong> on an upcoming match.</p>
-        </div>
-      ) : (
-        <div className="tickets-grid">
-          {tickets.map(t => (
-            <div key={t.booking_id} className="glass-card ticket-card">
-              <div className="ticket-header">
-                <div className="ticket-match-name">{t.home_team} vs {t.away_team}</div>
-                <div className="ticket-competition">{t.competition || t.league_code || "Match"}</div>
+    return (
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 w-full text-white min-h-[500px]">
+        {/* Left Side: Booking & Intelligence Panel */}
+        <div className="xl:col-span-8 flex flex-col gap-6">
+          <div className="glass-card p-5 border border-zinc-800 bg-zinc-950/20 rounded-2xl">
+            <h3 className="text-sm font-extrabold uppercase tracking-widest text-emerald-400 font-mono mb-4">
+              🎟️ Matchday Seating & Seating Intelligence
+            </h3>
+            
+            {/* Match Selector / Custom Search Toggle */}
+            <div className="flex flex-col gap-2 mb-5">
+              <div className="flex justify-between items-center">
+                <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
+                  {isCustomTicketSearch ? "Search Custom Match" : "Select Upcoming Match"}
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCustomTicketSearch(!isCustomTicketSearch);
+                    setCustomSelectedMatch(null);
+                    setTicketSelectedMatchId(null);
+                    setTicketForecastingData(null);
+                    setTicketAvailabilityData(null);
+                    setTicketAvailabilityError(null);
+                  }}
+                  className="text-[10px] font-bold text-emerald-500 hover:text-emerald-400 cursor-pointer bg-emerald-500/10 border border-emerald-500/20 px-2 py-1 rounded transition-colors"
+                >
+                  {isCustomTicketSearch ? "← Use Followed Matches Dropdown" : "🔍 Search Custom Match Name"}
+                </button>
               </div>
-              <div className="ticket-body">
-                {t.match_date && (
-                  <div className="ticket-detail-row">
-                    <svg className="ticket-detail-icon" width="14" height="14" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
-                    <span className="ticket-detail-label">Date</span>
-                    <span className="ticket-detail-value">{formatMatchDate(t.match_date)}</span>
+
+              {isCustomTicketSearch ? (
+                <div className="flex flex-col gap-3 mt-1">
+                  {/* Home vs Away inputs */}
+                  <div className="flex flex-col md:flex-row items-center gap-2 w-full">
+                    <div className="w-full md:flex-1">
+                      <input
+                        type="text"
+                        placeholder="Home Club (e.g. Manchster City)"
+                        value={customHomeQuery}
+                        onChange={e => setCustomHomeQuery(e.target.value)}
+                        className="w-full bg-zinc-900 border border-zinc-800 focus:border-emerald-500 rounded-xl px-4 py-2.5 text-xs text-white outline-none placeholder-zinc-500 transition-colors"
+                      />
+                    </div>
+                    <span className="text-zinc-500 font-extrabold font-mono px-2 text-xs shrink-0 select-none">VS</span>
+                    <div className="w-full md:flex-1">
+                      <input
+                        type="text"
+                        placeholder="Away Club (e.g. Arsenal)"
+                        value={customAwayQuery}
+                        onChange={e => setCustomAwayQuery(e.target.value)}
+                        className="w-full bg-zinc-900 border border-zinc-800 focus:border-emerald-500 rounded-xl px-4 py-2.5 text-xs text-white outline-none placeholder-zinc-500 transition-colors"
+                      />
+                    </div>
                   </div>
-                )}
-                {t.venue && (
-                  <div className="ticket-detail-row">
-                    <svg className="ticket-detail-icon" width="14" height="14" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" /></svg>
-                    <span className="ticket-detail-label">Venue</span>
-                    <span className="ticket-detail-value">{t.venue}</span>
+
+                  {/* Date selection and find button */}
+                  <div className="grid gap-3 grid-cols-1 md:grid-cols-12">
+                    <div className="md:col-span-8">
+                      <input
+                        type="date"
+                        value={customTicketDate}
+                        onChange={e => setCustomTicketDate(e.target.value)}
+                        className="w-full bg-zinc-900 border border-zinc-800 focus:border-emerald-500 rounded-xl px-4 py-2.5 text-xs text-white outline-none transition-colors"
+                      />
+                    </div>
+                    <div className="md:col-span-4">
+                      <button
+                        type="button"
+                        onClick={handleSearchCustomTicketMatch}
+                        disabled={isSearchingCustomTicket || !customHomeQuery.trim() || !customAwayQuery.trim()}
+                        className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-extrabold text-xs py-2.5 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                      >
+                        {isSearchingCustomTicket ? (
+                          <>
+                            <span className="w-1.5 h-1.5 bg-white rounded-full animate-bounce" />
+                            <span>Searching...</span>
+                          </>
+                        ) : (
+                          "Find in API"
+                        )}
+                      </button>
+                    </div>
                   </div>
-                )}
-                <div className="ticket-detail-row">
-                  <svg className="ticket-detail-icon" width="14" height="14" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
-                  <span className="ticket-detail-label">Booked</span>
-                  <span className="ticket-detail-value">{formatMatchDate(t.booked_at)}</span>
+                  <div className="text-[10px] text-zinc-500 italic mt-0.5 leading-relaxed">
+                    💡 If you make a minor spelling typo (e.g. "arsnal" or "manchster"), we'll auto-correct it using AI fuzzy matching!
+                  </div>
+                </div>
+              ) : (
+                <select
+                  value={ticketSelectedMatchId || ""}
+                  onChange={(e) => handleSelectMatch(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 focus:border-emerald-500 rounded-xl px-4 py-2.5 text-xs text-white outline-none transition-colors cursor-pointer"
+                >
+                  <option value="">-- Choose a Match --</option>
+                  {upcomingMatches.map(m => (
+                    <option key={m.id} value={m.id}>
+                      {m.homeTeam} vs {m.awayTeam} ({m.venue || "TBD Venue"}) - {m.eventDate ? new Date(m.eventDate).toLocaleDateString() : "TBD Date"}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            {activeMatch ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* 1. Live Ticketmaster Availability Check */}
+                <div className="glass-card p-4 border border-zinc-800 bg-zinc-900/40 rounded-xl flex flex-col justify-between min-h-[220px]">
+                  <div>
+                    <h4 className="text-xs font-extrabold uppercase tracking-wider text-zinc-300 mb-2">Live Availability Feed</h4>
+                    <p className="text-[10px] text-zinc-500 mb-3">Checking Ticketmaster Discovery API free-tier event listings...</p>
+                    
+                    {ticketAvailabilityLoading ? (
+                      <div className="flex items-center justify-center py-6">
+                        <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce mx-0.5" style={{ animationDelay: "0ms" }} />
+                        <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce mx-0.5" style={{ animationDelay: "150ms" }} />
+                        <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce mx-0.5" style={{ animationDelay: "300ms" }} />
+                      </div>
+                    ) : ticketAvailabilityError ? (
+                      <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 flex flex-col gap-1.5">
+                        <div className="flex items-center gap-1 text-[11px] font-bold text-red-400">
+                          <span>⚠️ Provider Config Required</span>
+                        </div>
+                        <p className="text-[10px] text-zinc-400 leading-relaxed">
+                          {ticketAvailabilityError}
+                        </p>
+                      </div>
+                    ) : ticketAvailabilityData ? (
+                      ticketAvailabilityData.event_name ? (
+                        <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3">
+                          <div className="text-[11px] font-bold text-emerald-400 mb-1">✓ Listing Found on Ticketmaster</div>
+                          <p className="text-[10px] text-zinc-300 font-semibold mb-2">{ticketAvailabilityData.event_name}</p>
+                          {ticketAvailabilityData.price_ranges && ticketAvailabilityData.price_ranges.length > 0 && (
+                            <div className="text-[10px] text-zinc-400 mb-2">
+                              Price range: <span className="font-bold text-zinc-300">${ticketAvailabilityData.price_ranges[0].min}</span> to <span className="font-bold text-zinc-300">${ticketAvailabilityData.price_ranges[0].max}</span> {ticketAvailabilityData.price_ranges[0].currency}
+                            </div>
+                          )}
+                          <a
+                            href={ticketAvailabilityData.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-block bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] px-2.5 py-1.5 rounded-lg transition-colors"
+                          >
+                            Buy on Ticketmaster ↗
+                          </a>
+                        </div>
+                      ) : (
+                        <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-3 flex flex-col gap-1.5">
+                          <div className="flex items-center gap-1 text-[11px] font-bold text-yellow-400">
+                            <span>ℹ️ Info from Ticketmaster</span>
+                          </div>
+                          <p className="text-[10px] text-zinc-400 leading-relaxed">
+                            {ticketAvailabilityData.message || "No matching live event listings found on Ticketmaster for this query."}
+                          </p>
+                        </div>
+                      )
+                    ) : (
+                      <div className="text-center py-6 text-zinc-600 text-xs">No active availability status loaded.</div>
+                    )}
+                  </div>
+                  
+                  {/* Book Mock-Free Ticket Directly */}
+                  <div>
+                    {!bookedMatchIds.has(activeMatch.id) ? (
+                      <button
+                        onClick={() => handleBookTicket(activeMatch)}
+                        disabled={!!bookingInProgress}
+                        className="w-full bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl py-2 mt-4 text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                      >
+                        {bookingInProgress === activeMatch.id ? "Booking..." : "Confirm Mock-Free Seat Registration"}
+                      </button>
+                    ) : (
+                      <div className="bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 rounded-xl py-2 px-3 text-center text-xs font-bold mt-4 flex items-center justify-center gap-1">
+                        <span>✓ Seat Registered</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 2. AI Seating & Seating Intelligence Forecast */}
+                <div className="glass-card p-4 border border-zinc-800 bg-zinc-900/40 rounded-xl min-h-[220px] flex flex-col justify-between">
+                  <div>
+                    <h4 className="text-xs font-extrabold uppercase tracking-wider text-zinc-300 mb-2">AI Seating & Price Forecaster</h4>
+                    <p className="text-[10px] text-zinc-500 mb-3">Model stadium demand, price trends, and sellout probability.</p>
+                    
+                    {ticketForecastingLoading ? (
+                      <div className="flex flex-col items-center justify-center py-10 gap-2">
+                        <div className="flex items-center justify-center">
+                          <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce mx-0.5" style={{ animationDelay: "0ms" }} />
+                          <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce mx-0.5" style={{ animationDelay: "150ms" }} />
+                          <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce mx-0.5" style={{ animationDelay: "300ms" }} />
+                        </div>
+                        <div className="text-[9px] font-mono text-zinc-500">Querying Gemini Forecasting Model...</div>
+                      </div>
+                    ) : ticketForecastingData ? (
+                      <div className="flex flex-col gap-3.5">
+                        {/* Expected Attendance & Sellout */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="bg-zinc-950/40 border border-zinc-800/80 p-2.5 rounded-xl text-center">
+                            <div className="text-[9px] font-mono text-zinc-500 uppercase tracking-wider">Expected Attendance</div>
+                            <div className="text-sm font-black text-violet-300 mt-0.5">
+                              {ticketForecastingData.expected_attendance?.toLocaleString() || "TBD"}
+                            </div>
+                          </div>
+                          <div className="bg-zinc-950/40 border border-zinc-800/80 p-2.5 rounded-xl text-center">
+                            <div className="text-[9px] font-mono text-zinc-500 uppercase tracking-wider">Sellout Risk</div>
+                            <div className="text-sm font-black text-violet-300 mt-0.5">
+                              {ticketForecastingData.sellout_probability ? `${Math.round(ticketForecastingData.sellout_probability * 100)}%` : "TBD"}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Dynamic Price Timeline */}
+                        {ticketForecastingData.dynamic_pricing_timeline && (
+                          <div className="bg-zinc-950/40 border border-zinc-800/80 p-2.5 rounded-xl">
+                            <div className="text-[9px] font-mono text-zinc-500 uppercase tracking-wider mb-2">Dynamic Price Timeline</div>
+                            <div className="flex items-center justify-between text-[10px] font-mono">
+                              <div className="text-center">
+                                <span className="text-zinc-500">Today</span>
+                                <div className="font-bold text-zinc-300">${ticketForecastingData.dynamic_pricing_timeline.today}</div>
+                              </div>
+                              <div className="h-0.5 flex-1 bg-zinc-800 mx-2 relative">
+                                <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[9px] text-violet-400 font-bold">
+                                  {ticketForecastingData.price_change_percent ? `+${ticketForecastingData.price_change_percent}%` : ""}
+                                </span>
+                              </div>
+                              <div className="text-center">
+                                <span className="text-zinc-500">3 Days</span>
+                                <div className="font-bold text-zinc-300">${ticketForecastingData.dynamic_pricing_timeline.three_days_later}</div>
+                              </div>
+                              <div className="h-0.5 flex-1 bg-zinc-800 mx-2" />
+                              <div className="text-center">
+                                <span className="text-zinc-500">Matchday</span>
+                                <div className="font-bold text-violet-300">${ticketForecastingData.dynamic_pricing_timeline.matchday}</div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Timing Advice */}
+                        <div className="bg-zinc-950/40 border border-zinc-800/80 p-2.5 rounded-xl flex items-center justify-between gap-2">
+                          <div className="flex flex-col text-left">
+                            <span className="text-[9px] font-mono text-zinc-500 uppercase tracking-wider">Purchase Advice</span>
+                            <span className="text-[10px] text-zinc-400 mt-0.5 leading-tight">{ticketForecastingData.reasoning}</span>
+                          </div>
+                          <span className={`px-2 py-1 rounded text-[10px] font-black uppercase ${
+                            ticketForecastingData.purchase_recommendation === "BUY_NOW" 
+                              ? "bg-red-500/20 text-red-400 border border-red-500/30" 
+                              : "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                          }`}>
+                            {ticketForecastingData.purchase_recommendation?.replace("_", " ") || "BUY NOW"}
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-6 text-zinc-600 text-xs">Run Seating & Seating Forecast below to see dynamic predictions.</div>
+                    )}
+                  </div>
+
+                  {!ticketForecastingData && (
+                    <button
+                      onClick={() => handleRunAISeatingForecast(activeMatch)}
+                      className="w-full bg-violet-600 hover:bg-violet-500 text-white rounded-xl py-2 mt-4 text-xs font-bold transition-all cursor-pointer"
+                    >
+                      Run AI Seating Forecast
+                    </button>
+                  )}
                 </div>
               </div>
-              <div className="ticket-footer">
+            ) : (
+              <div className="empty-state py-12">
+                <p className="text-xs text-zinc-500">Choose an upcoming match from the selector above to check live pricing & dynamic forecasts.</p>
+              </div>
+            )}
+
+            {/* Stand Occupancy Heatmap (Rendered if forecast data exists) */}
+            {activeMatch && ticketForecastingData?.seating_occupancy && (
+              <div className="mt-5 p-4 border border-zinc-800/80 bg-zinc-900/30 rounded-xl">
+                <h4 className="text-xs font-extrabold uppercase tracking-wider text-zinc-300 mb-3">AI Seating Stand Occupancy Heatmap</h4>
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-3.5">
+                  {Object.entries(ticketForecastingData.seating_occupancy).map(([stand, percentage]: [string, any]) => {
+                    const standName = stand.replace("_", " ").toUpperCase();
+                    return (
+                      <div key={stand} className="bg-zinc-950/50 border border-zinc-800/80 p-3 rounded-xl flex flex-col justify-between gap-2 text-left">
+                        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">{standName}</span>
+                        <div className="flex flex-col gap-1.5">
+                          <div className="flex items-center justify-between text-[11px] font-black text-violet-300">
+                            <span>{percentage}%</span>
+                            <span className="text-[8px] text-zinc-500">DEMAND</span>
+                          </div>
+                          <div className="w-full h-1 bg-zinc-800 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-violet-500 transition-all duration-500"
+                              style={{ width: `${percentage}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right Side: My Booked Tickets */}
+        <div className="xl:col-span-4 flex flex-col gap-6">
+          <div className="glass-card p-5 border border-zinc-800 bg-zinc-950/20 rounded-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-extrabold uppercase tracking-widest text-emerald-400 font-mono">
+                🎫 My Booked Tickets
+              </h3>
+              <button
+                onClick={() => email && fetchTickets(email)}
+                className="text-[10px] font-bold text-emerald-500 hover:underline cursor-pointer"
+              >
+                Refresh
+              </button>
+            </div>
+
+            {ticketsLoading ? (
+              <div className="flex flex-col gap-3">
+                {[1, 2].map(i => <div key={i} className="loading-shimmer shimmer-card h-24" />)}
+              </div>
+            ) : tickets.length === 0 ? (
+              <div className="empty-state py-8 text-center border border-dashed border-zinc-800 rounded-xl">
+                <p className="text-xs text-zinc-500">No tickets registered yet.</p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {tickets.map(t => (
+                  <div key={t.booking_id} className="glass-card booked-ticket-card p-4 border border-zinc-800 bg-zinc-900/30 hover:bg-zinc-900/50 hover:border-emerald-500/30 transition-all duration-300 rounded-xl text-xs flex flex-col gap-3 text-left">
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="font-extrabold text-sm text-zinc-100 leading-snug break-words pr-2" title={`${t.home_team} vs ${t.away_team}`}>
+                          {t.home_team} vs {t.away_team}
+                        </span>
+                        <span className="text-[9px] font-mono text-zinc-500 bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800 shrink-0 select-all" title={t.booking_id}>
+                          #{t.booking_id.substring(0, 8)}
+                        </span>
+                      </div>
+                      <div className="flex flex-col gap-1 text-[11px] text-zinc-400 mt-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-emerald-400">📍</span> {t.venue}
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-emerald-400">📅</span> {formatMatchDate(t.match_date)}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between border-t border-zinc-850 pt-3 mt-1">
+                      <button
+                        className="px-2.5 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded-lg text-[10px] font-bold transition-colors cursor-pointer"
+                        onClick={() => handlePlanJourneyForTicket(t)}
+                      >
+                        Plan Journey
+                      </button>
+                      <span className="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded font-mono uppercase tracking-wider font-semibold">
+                        {t.status}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ── Match Analysis Helpers ────────────────────────────────────────────────
+  const getPlayerCoordinates = (position: string, index: number, isHome: boolean) => {
+    let x = 50;
+    const pos = position.toLowerCase();
+    
+    // Horizontal spacing (x coordinate: 0% to 100%)
+    if (pos.includes("goalkeeper") || pos.includes("gk")) {
+      x = 50;
+    } else if (pos.includes("left-back") || pos.includes("lb")) {
+      x = 15;
+    } else if (pos.includes("right-back") || pos.includes("rb")) {
+      x = 85;
+    } else if (pos.includes("centre-back") || pos.includes("cb")) {
+      x = index === 1 || index === 2 ? 38 : 62;
+    } else if (pos.includes("left wing-back") || pos.includes("lwb")) {
+      x = 12;
+    } else if (pos.includes("right wing-back") || pos.includes("rwb")) {
+      x = 88;
+    } else if (pos.includes("defensive midfield") || pos.includes("dmf") || pos.includes("dm")) {
+      x = index === 5 ? 40 : 60;
+    } else if (pos.includes("central midfield") || pos.includes("cm") || pos.includes("midfield")) {
+      if (index === 6) x = 32;
+      else if (index === 7) x = 68;
+      else x = 50;
+    } else if (pos.includes("attacking midfield") || pos.includes("am")) {
+      x = 50;
+    } else if (pos.includes("left winger") || pos.includes("lw") || pos.includes("left midfielder")) {
+      x = 22;
+    } else if (pos.includes("right winger") || pos.includes("rw") || pos.includes("right midfielder")) {
+      x = 78;
+    } else if (pos.includes("centre-forward") || pos.includes("cf") || pos.includes("striker") || pos.includes("second striker")) {
+      if (index === 10) x = 40;
+      else if (index === 9) x = 60;
+      else x = 50;
+    } else {
+      x = 15 + (index % 5) * 18;
+    }
+    
+    // Vertical spacing (y coordinate: 0% to 100%)
+    let row = 0; // 0: goalie, 1: defense, 2: midfield, 3: attack
+    if (pos.includes("goalkeeper") || pos.includes("gk")) {
+      row = 0;
+    } else if (pos.includes("back") || pos.includes("cb") || pos.includes("lb") || pos.includes("rb") || pos.includes("defend")) {
+      row = 1;
+    } else if (pos.includes("midfield") || pos.includes("dm") || pos.includes("cm") || pos.includes("am")) {
+      row = 2;
+    } else {
+      row = 3; // forwards & wingers
+    }
+    
+    let y = 0;
+    if (isHome) {
+      // Home team occupies top half (row 0 goalie at 7% to row 3 forwards at 43%)
+      y = 7 + row * 12;
+    } else {
+      // Away team occupies bottom half (row 0 goalie at 93% to row 3 forwards at 57%)
+      y = 93 - row * 12;
+    }
+    
+    return { x, y };
+  };
+
+  const renderAnalysisStatBar = (label: string, homeVal: any, awayVal: any) => {
+    const hNum = parseFloat(homeVal) || 0;
+    const aNum = parseFloat(awayVal) || 0;
+    const total = hNum + aNum || 1;
+    const homePercent = (hNum / total) * 100;
+    
+    return (
+      <div className="flex flex-col gap-1 w-full text-xs" key={label}>
+        <div className="flex justify-between items-center text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+          <span>{homeVal}</span>
+          <span className="text-zinc-500 font-mono text-[9px]">{label}</span>
+          <span>{awayVal}</span>
+        </div>
+        <div className="w-full h-1.5 bg-zinc-900 border border-zinc-800/60 rounded-full flex overflow-hidden">
+          <div className="bg-emerald-500 h-full transition-all duration-500" style={{ width: `${homePercent}%` }} />
+          <div className="bg-violet-500 h-full transition-all duration-500" style={{ width: `${100 - homePercent}%` }} />
+        </div>
+      </div>
+    );
+  };
+
+  const renderAnalysisThreatChart = (momentum: number[]) => {
+    const width = 500;
+    const height = 120;
+    const paddingX = 40;
+    const paddingY = 20;
+    
+    const points = momentum.map((val, idx) => {
+      const x = paddingX + (idx / 5) * (width - 2 * paddingX);
+      const y = height - paddingY - (val / 100) * (height - 2 * paddingY);
+      return { x, y };
+    });
+    
+    const pathData = points.reduce((acc, p, idx) => {
+      return acc + (idx === 0 ? `M ${p.x} ${p.y}` : ` L ${p.x} ${p.y}`);
+    }, "");
+    
+    return (
+      <div className="bg-zinc-950/40 border border-zinc-800/80 p-4 rounded-xl flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <h5 className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider">Tactical Dominance Timeline</h5>
+          <span className="text-[8px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded font-mono uppercase tracking-wider">xG Threat Momentum</span>
+        </div>
+        <div className="relative w-full overflow-x-auto">
+          <svg viewBox={`0 0 ${width} ${height}`} className="w-full min-w-[320px] overflow-visible">
+            {/* Center line (50% - balanced threat) */}
+            <line x1={paddingX} y1={height / 2} x2={width - paddingX} y2={height / 2} stroke="#27272a" strokeDasharray="3,3" strokeWidth={1} />
+            <text x={paddingX - 10} y={height / 2 + 3} fill="#52525b" fontSize="8" textAnchor="end" className="font-mono">50%</text>
+            <text x={paddingX - 10} y={paddingY + 3} fill="#10b981" fontSize="8" textAnchor="end" className="font-mono">Home</text>
+            <text x={paddingX - 10} y={height - paddingY + 3} fill="#8b5cf6" fontSize="8" textAnchor="end" className="font-mono">Away</text>
+            
+            {/* Threat Dominance Line */}
+            <path d={pathData} fill="none" stroke="#10b981" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+            
+            {/* Nodes */}
+            {points.map((p, idx) => (
+              <g key={idx}>
+                <circle cx={p.x} cy={p.y} r={4.5} fill="#09090b" stroke="#10b981" strokeWidth={2.5} />
+                <text x={p.x} y={p.y - 8} fill="#a1a1aa" fontSize="8" textAnchor="middle" className="font-mono font-bold">{momentum[idx]}%</text>
+                <text x={p.x} y={height - 4} fill="#52525b" fontSize="8" textAnchor="middle" className="font-mono">{idx * 15 + 15}'</text>
+              </g>
+            ))}
+          </svg>
+        </div>
+      </div>
+    );
+  };
+
+  const renderAnalysisMarkdown = (text: string) => {
+    if (!text) return null;
+    
+    const parseInline = (content: string) => {
+      const parts = content.split("**");
+      return parts.map((part, i) => {
+        if (i % 2 === 1) {
+          return <strong key={i} className="text-zinc-100 font-extrabold">{part}</strong>;
+        }
+        return part;
+      });
+    };
+
+    return text.split("\n").map((line, idx) => {
+      const trimmed = line.trim();
+      if (trimmed.startsWith("###")) {
+        return (
+          <h4 key={idx} className="text-xs font-extrabold text-emerald-400 mt-5 mb-2.5 uppercase tracking-widest font-mono border-b border-zinc-900 pb-1">
+            {trimmed.replace("###", "").trim()}
+          </h4>
+        );
+      }
+      if (trimmed.startsWith("####")) {
+        return (
+          <h5 key={idx} className="text-[11px] font-bold text-zinc-300 mt-4 mb-2 uppercase tracking-wide">
+            {trimmed.replace("####", "").trim()}
+          </h5>
+        );
+      }
+      if (trimmed.startsWith("##")) {
+        return (
+          <h3 key={idx} className="text-sm font-black text-emerald-400 mt-6 mb-3 uppercase tracking-widest border-b border-zinc-800 pb-1.5 font-mono">
+            {trimmed.replace("##", "").trim()}
+          </h3>
+        );
+      }
+      if (trimmed.startsWith("*") || trimmed.startsWith("-")) {
+        return (
+          <li key={idx} className="text-xs text-zinc-300 list-disc ml-5 mb-1.5 leading-relaxed text-left">
+            {parseInline(trimmed.substring(1).trim())}
+          </li>
+        );
+      }
+      if (trimmed) {
+        return (
+          <p key={idx} className="text-xs text-zinc-400 mb-3 leading-relaxed text-left">
+            {parseInline(trimmed)}
+          </p>
+        );
+      }
+      return <div key={idx} className="h-1.5" />;
+    });
+  };
+
+  const renderAnalysis = () => {
+    const completedMatches = followedMatches.filter(m => m.status === "FT");
+    const displayMatches = completedMatches.length > 0 ? completedMatches : followedMatches;
+    const activeMatchDetail = analysisMatchDetail;
+
+    return (
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 w-full text-white min-h-[500px]">
+        {/* Match Select Panel */}
+        <div className="xl:col-span-12">
+          <div className="glass-card p-5 border border-zinc-800 bg-zinc-950/20 rounded-2xl">
+            <h3 className="text-sm font-extrabold uppercase tracking-widest text-emerald-400 font-mono mb-4">
+              📊 Match Statistics & AI Tactical Analysis
+            </h3>
+            <div className="flex flex-col gap-2">
+              <div className="flex justify-between items-center mb-1">
+                <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
+                  {isCustomAnalysisPrompt ? "Describe the Match to Find & Analyze" : "Select Completed Match"}
+                </label>
                 <button
-                  className="px-3 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 rounded-lg text-xs font-bold transition-colors cursor-pointer"
-                  onClick={() => handlePlanJourneyForTicket(t)}
+                  type="button"
+                  onClick={() => {
+                    setIsCustomAnalysisPrompt(!isCustomAnalysisPrompt);
+                    setAnalysisMatchDetail(null);
+                    setAnalysisSelectedMatchId(null);
+                    setAnalysisAIData(null);
+                    setAnalysisAIError(null);
+                  }}
+                  className="text-[10px] font-bold text-emerald-500 hover:text-emerald-400 cursor-pointer bg-emerald-500/10 border border-emerald-500/20 px-2 py-1 rounded transition-colors"
                 >
-                  Plan Journey
+                  {isCustomAnalysisPrompt ? "← Use Completed Matches Dropdown" : "🔍 Find Match with AI Prompt / Search"}
                 </button>
-                <span className="ticket-status-pill">{t.status}</span>
+              </div>
+
+              {isCustomAnalysisPrompt ? (
+                <div className="flex flex-col gap-2 mt-1">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="e.g. Manchester City vs Inter Milan Champions League Final 2023, Rodri scored"
+                      value={customAnalysisPromptQuery}
+                      onChange={e => setCustomAnalysisPromptQuery(e.target.value)}
+                      className="flex-1 bg-zinc-900 border border-zinc-800 focus:border-emerald-500 rounded-xl px-4 py-2.5 text-xs text-white outline-none placeholder-zinc-500 transition-colors"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSearchAnalysisMatchByPrompt}
+                      disabled={analysisLoading || !customAnalysisPromptQuery.trim()}
+                      className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-extrabold text-xs px-5 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0"
+                    >
+                      {analysisLoading ? "Searching..." : "Find & Analyze"}
+                    </button>
+                  </div>
+                  <div className="text-[10px] text-zinc-500 italic leading-relaxed">
+                    💡 Enter any details you remember (teams, year, player who scored, final score, or stadium) and our AI will reconstruct the exact match data!
+                  </div>
+                </div>
+              ) : (
+                <select
+                  value={analysisSelectedMatchId || ""}
+                  onChange={(e) => handleSelectAnalysisMatch(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 focus:border-emerald-500 rounded-xl px-4 py-2.5 text-xs text-white outline-none transition-colors cursor-pointer"
+                >
+                  <option value="">-- Choose a Match to Analyze --</option>
+                  {displayMatches.map(m => (
+                    <option key={m.id} value={m.id}>
+                      {m.homeTeam} {m.homeScore}-{m.awayScore} {m.awayTeam} ({m.venue || "Stadium"}) - {m.eventDate ? new Date(m.eventDate).toLocaleDateString() : "TBD Date"}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Selected Match Dashboard */}
+        {analysisLoading ? (
+          <div className="xl:col-span-12 flex flex-col items-center justify-center py-20 gap-3">
+            <span className="w-2.5 h-2.5 bg-emerald-400 rounded-full animate-ping" />
+            <div className="text-xs text-zinc-500 font-mono">Fetching match details & lineups...</div>
+          </div>
+        ) : activeMatchDetail ? (
+          <>
+            {/* Left Column: Match Stats & Pitch Lineup (8 cols) */}
+            <div className="xl:col-span-7 flex flex-col gap-6">
+              {/* Pitch Visualizer */}
+              <div className="glass-card p-5 border border-zinc-800 bg-zinc-950/20 rounded-2xl flex flex-col gap-4 text-center">
+                <div className="flex justify-between items-center">
+                  <h4 className="text-xs font-extrabold uppercase tracking-wider text-emerald-400 font-mono">
+                    🏟️ Tactical Formations
+                  </h4>
+                  <div className="flex gap-4 text-[10px] font-mono font-bold">
+                    <span className="text-emerald-400">{activeMatchDetail.homeTeam?.name}: {activeMatchDetail.homeTeam?.formation}</span>
+                    <span className="text-violet-400">{activeMatchDetail.awayTeam?.name}: {activeMatchDetail.awayTeam?.formation}</span>
+                  </div>
+                </div>
+
+                {/* CSS Soccer Field */}
+                <div className="w-full aspect-[4/5] bg-emerald-950/20 border-2 border-emerald-500/20 rounded-xl relative p-4 overflow-hidden shadow-inner flex flex-col justify-between">
+                  {/* Field Markings */}
+                  <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-emerald-500/10 -translate-y-1/2" />
+                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-28 h-28 border border-emerald-500/10 rounded-full" />
+                  <div className="absolute top-0 left-1/2 -translate-x-1/2 w-44 h-16 border-b border-x border-emerald-500/10" />
+                  <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-44 h-16 border-t border-x border-emerald-500/10" />
+                  
+                  {/* Home Team Lineup */}
+                  {activeMatchDetail.homeTeam?.lineup?.map((p: any, idx: number) => {
+                    const coords = getPlayerCoordinates(p.position, idx, true);
+                    return (
+                      <div
+                        key={p.id}
+                        className="absolute group z-10 -translate-x-1/2 -translate-y-1/2 cursor-default"
+                        style={{ left: `${coords.x}%`, top: `${coords.y}%` }}
+                      >
+                        <div className="w-6 h-6 rounded-full bg-emerald-500 border border-emerald-300 flex items-center justify-center text-[10px] font-black text-black shadow-lg">
+                          {p.shirtNumber || idx + 1}
+                        </div>
+                        <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1 bg-zinc-950/90 border border-zinc-800 text-[8px] text-zinc-300 rounded px-1.5 py-0.5 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-20 pointer-events-none shadow-md font-mono">
+                          {p.name} ({p.position})
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* Away Team Lineup */}
+                  {activeMatchDetail.awayTeam?.lineup?.map((p: any, idx: number) => {
+                    const coords = getPlayerCoordinates(p.position, idx, false);
+                    return (
+                      <div
+                        key={p.id}
+                        className="absolute group z-10 -translate-x-1/2 -translate-y-1/2 cursor-default"
+                        style={{ left: `${coords.x}%`, top: `${coords.y}%` }}
+                      >
+                        <div className="w-6 h-6 rounded-full bg-violet-600 border border-violet-400 flex items-center justify-center text-[10px] font-black text-white shadow-lg">
+                          {p.shirtNumber || idx + 1}
+                        </div>
+                        <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1 bg-zinc-950/90 border border-zinc-800 text-[8px] text-zinc-300 rounded px-1.5 py-0.5 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-20 pointer-events-none shadow-md font-mono">
+                          {p.name} ({p.position})
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Match Stats Comparison */}
+              <div className="glass-card p-5 border border-zinc-800 bg-zinc-950/20 rounded-2xl flex flex-col gap-4">
+                <h4 className="text-xs font-extrabold uppercase tracking-wider text-emerald-400 font-mono">
+                  📊 Match Performance Statistics
+                </h4>
+                <div className="flex flex-col gap-3.5">
+                  {renderAnalysisStatBar("Possession", activeMatchDetail.homeTeam?.statistics?.ball_possession ? `${activeMatchDetail.homeTeam.statistics.ball_possession}%` : "50%", activeMatchDetail.awayTeam?.statistics?.ball_possession ? `${activeMatchDetail.awayTeam.statistics.ball_possession}%` : "50%")}
+                  {renderAnalysisStatBar("Total Shots", activeMatchDetail.homeTeam?.statistics?.shots || 0, activeMatchDetail.awayTeam?.statistics?.shots || 0)}
+                  {renderAnalysisStatBar("Shots on Target", activeMatchDetail.homeTeam?.statistics?.shots_on_goal || 0, activeMatchDetail.awayTeam?.statistics?.shots_on_goal || 0)}
+                  {renderAnalysisStatBar("Passes Completed", activeMatchDetail.homeTeam?.statistics?.passes || 0, activeMatchDetail.awayTeam?.statistics?.passes || 0)}
+                  {renderAnalysisStatBar("Pass Accuracy", activeMatchDetail.homeTeam?.statistics?.pass_accuracy ? `${activeMatchDetail.homeTeam.statistics.pass_accuracy}%` : "80%", activeMatchDetail.awayTeam?.statistics?.pass_accuracy ? `${activeMatchDetail.awayTeam.statistics.pass_accuracy}%` : "80%")}
+                  {renderAnalysisStatBar("Fouls", activeMatchDetail.homeTeam?.statistics?.fouls || 0, activeMatchDetail.awayTeam?.statistics?.fouls || 0)}
+                  {renderAnalysisStatBar("Corner Kicks", activeMatchDetail.homeTeam?.statistics?.corner_kicks || 0, activeMatchDetail.awayTeam?.statistics?.corner_kicks || 0)}
+                  {renderAnalysisStatBar("Goalkeeper Saves", activeMatchDetail.homeTeam?.statistics?.saves || 0, activeMatchDetail.awayTeam?.statistics?.saves || 0)}
+                </div>
               </div>
             </div>
-          ))}
-        </div>
-      )}
-    </>
-  );
+
+            {/* Right Column: Events & AI report (5 cols) */}
+            <div className="xl:col-span-5 flex flex-col gap-6">
+              {/* Chronological Events Timeline */}
+              <div className="glass-card p-5 border border-zinc-800 bg-zinc-950/20 rounded-2xl flex flex-col gap-4">
+                <h4 className="text-xs font-extrabold uppercase tracking-wider text-emerald-400 font-mono">
+                  🕒 Match Events Timeline
+                </h4>
+                
+                <div className="flex flex-col gap-3 relative pl-4 border-l border-zinc-800">
+                  {/* Goals */}
+                  {activeMatchDetail.goals && activeMatchDetail.goals.length > 0 ? (
+                    activeMatchDetail.goals.map((g: any, index: number) => {
+                      const isHomeGoal = g.teamId === activeMatchDetail.homeTeamId || g.teamId === activeMatchDetail.homeTeam?.id;
+                      return (
+                        <div className="relative flex flex-col items-start gap-0.5 text-left" key={`g-${index}`}>
+                          <span className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-emerald-400 border border-zinc-950 flex items-center justify-center text-[7px]" />
+                          <div className="text-xs font-black text-zinc-100 flex items-center gap-1.5">
+                            <span>⚽ {g.scorer}</span>
+                            <span className="text-[10px] font-mono text-emerald-400 font-extrabold">{g.minute}'</span>
+                          </div>
+                          <span className="text-[9px] text-zinc-500 uppercase font-mono tracking-wider">Goal • {isHomeGoal ? activeMatchDetail.homeTeam?.name : activeMatchDetail.awayTeam?.name}</span>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="text-zinc-600 text-xs text-left py-1">No goals recorded.</div>
+                  )}
+
+                  {/* Bookings */}
+                  {activeMatchDetail.bookings && activeMatchDetail.bookings.map((b: any, index: number) => {
+                    const isHomeBooking = b.teamId === activeMatchDetail.homeTeamId || b.teamId === activeMatchDetail.homeTeam?.id;
+                    const isRed = b.card === "RED";
+                    return (
+                      <div className="relative flex flex-col items-start gap-0.5 text-left mt-1" key={`b-${index}`}>
+                        <span className={`absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full ${isRed ? "bg-red-500" : "bg-amber-400"} border border-zinc-950`} />
+                        <div className="text-xs font-bold text-zinc-300 flex items-center gap-1.5">
+                          <span>🟨 {b.player}</span>
+                          <span className="text-[10px] font-mono text-zinc-500">{b.minute}'</span>
+                        </div>
+                        <span className="text-[9px] text-zinc-500 uppercase font-mono tracking-wider">{b.card} Card • {isHomeBooking ? activeMatchDetail.homeTeam?.name : activeMatchDetail.awayTeam?.name}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* AI Professional Report Panel */}
+              <div className="glass-card p-5 border border-zinc-800 bg-zinc-950/20 rounded-2xl flex flex-col gap-4">
+                <div className="flex justify-between items-center">
+                  <h4 className="text-xs font-extrabold uppercase tracking-wider text-emerald-400 font-mono">
+                    🤖 AI Scout Tactical review
+                  </h4>
+                  {analysisAIData && (
+                    <span className={`text-[8px] px-2 py-0.5 rounded font-mono font-bold ${
+                      analysisAIData.status === "fallback" ? "bg-amber-500/10 text-amber-400" : "bg-violet-500/10 text-violet-400"
+                    }`}>
+                      {analysisAIData.status === "fallback" ? "LOCAL ESTIMATE" : "GEMINI ENGINE"}
+                    </span>
+                  )}
+                </div>
+
+                {analysisAILoading ? (
+                  <div className="flex flex-col items-center justify-center py-16 gap-3">
+                    <div className="flex items-center justify-center">
+                      <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce mx-0.5" style={{ animationDelay: "0ms" }} />
+                      <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce mx-0.5" style={{ animationDelay: "150ms" }} />
+                      <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce mx-0.5" style={{ animationDelay: "300ms" }} />
+                    </div>
+                    <div className="text-[9px] font-mono text-zinc-500 text-center max-w-[200px]">
+                      Analyzing match stats, lineups, and events with Gemini...
+                    </div>
+                  </div>
+                ) : analysisAIData ? (
+                  <div className="flex flex-col gap-5">
+                    {/* Threat momentum graph */}
+                    {analysisAIData.threat_momentum && renderAnalysisThreatChart(analysisAIData.threat_momentum)}
+
+                    {/* MVP Player Spotlight */}
+                    {analysisAIData.mvp_player && (
+                      <div className="bg-zinc-950/40 border border-zinc-800/80 p-4 rounded-xl flex items-start gap-3.5 text-left">
+                        <div className="w-9 h-9 rounded-full bg-violet-950 border border-violet-500/30 flex items-center justify-center font-black text-xs text-violet-300">
+                          {analysisAIData.mvp_player.shirtNumber || 10}
+                        </div>
+                        <div className="flex-1 flex flex-col gap-1">
+                          <div className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Match MVP Candidate</div>
+                          <div className="text-xs font-extrabold text-zinc-100">{analysisAIData.mvp_player.name}</div>
+                          <div className="text-[9px] font-bold text-zinc-400">{analysisAIData.mvp_player.team}</div>
+                          <p className="text-[10px] text-zinc-400 leading-relaxed mt-1">
+                            {analysisAIData.mvp_player.reason}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Tactical Report Text */}
+                    <div className="bg-zinc-950/20 border border-zinc-900 rounded-xl p-4 max-h-[380px] overflow-y-auto custom-scrollbar flex flex-col gap-3">
+                      {renderAnalysisMarkdown(analysisAIData.report_markdown)}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-10 gap-3">
+                    <p className="text-xs text-zinc-500">No tactical report loaded yet.</p>
+                    <button
+                      onClick={handleGenerateTacticalBreakdown}
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition-colors cursor-pointer"
+                    >
+                      Generate AI Tactical Breakdown
+                    </button>
+                  </div>
+                )}
+
+                {analysisAIError && (
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-[10px] text-red-400 text-left">
+                    ⚠️ {analysisAIError}
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="xl:col-span-12 glass-card p-12 text-center border border-zinc-800">
+            <p className="text-xs text-zinc-500">Please select a completed match above to load lineups, events, and stats comparisons.</p>
+          </div>
+        )}
+      </div>
+    );
+  };
+
 
   const renderAssistant = () => {
     const renderAssistantMd = (text: string) => {
@@ -1275,6 +2336,7 @@ export default function DashboardPage() {
       setJourneyMatchName(`${match.homeTeam} vs ${match.awayTeam}`);
       setJourneyMatchDate(matchDateStr);
       setJourneyStadium(match.venue || "Emirates Stadium");
+      setStadiumSearchQuery(match.venue || "Emirates Stadium");
       if (matchDateStr) {
         setJourneyCheckIn(matchDateStr);
         const dt = new Date(matchDateStr);
@@ -1291,6 +2353,7 @@ export default function DashboardPage() {
       setJourneyMatchName(`${ticket.home_team} vs ${ticket.away_team}`);
       setJourneyMatchDate(matchDateStr);
       setJourneyStadium(ticket.venue || "Emirates Stadium");
+      setStadiumSearchQuery(ticket.venue || "Emirates Stadium");
       if (matchDateStr) {
         setJourneyCheckIn(matchDateStr);
         const dt = new Date(matchDateStr);
@@ -1597,11 +2660,11 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Quick-select Row */}
-                {((followedMatches && followedMatches.length > 0) || (tickets && tickets.length > 0)) && (
+                {((followedMatches && followedMatches.some(m => m.status !== "FT")) || (tickets && tickets.length > 0)) && (
                   <div className="space-y-3">
                     <div className="section-label">Quick Select Match</div>
                     <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
-                      {tickets.slice(0, 3).map(ticket => (
+                      {tickets.map(ticket => (
                         <button
                           key={ticket.booking_id}
                           onClick={() => handleTicketQuickSelect(ticket)}
@@ -1613,7 +2676,7 @@ export default function DashboardPage() {
                           {ticket.match_date && <div className="text-[10px] text-zinc-500 font-mono mt-1">{ticket.match_date.split("T")[0]}</div>}
                         </button>
                       ))}
-                      {followedMatches.slice(0, 3).map(match => (
+                      {followedMatches.filter(m => m.status !== "FT").map(match => (
                         <button
                           key={match.id}
                           onClick={() => handleQuickSelect(match)}
@@ -1655,52 +2718,84 @@ export default function DashboardPage() {
                     </div>
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="space-y-2 relative" ref={stadiumRef}>
                     <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider">Stadium / Match Venue</label>
-                    <div className="grid gap-3 sm:grid-cols-4">
-                      {["Emirates Stadium", "Anfield", "Santiago Bernabéu"].map(venue => (
-                        <button
-                          key={venue}
-                          onClick={() => setJourneyStadium(venue)}
-                          className={`p-3 rounded-xl border text-center font-bold text-xs cursor-pointer transition-all ${
-                            journeyStadium === venue
-                              ? "bg-emerald-500/10 border-emerald-500 text-emerald-500"
-                              : "border-zinc-800 hover:border-zinc-700 bg-zinc-900/20 text-zinc-400"
-                          }`}
-                        >
-                          {venue}
-                        </button>
-                      ))}
-                      <button
-                        onClick={() => {
-                          if (["Emirates Stadium", "Anfield", "Santiago Bernabéu"].includes(journeyStadium)) {
-                            setJourneyStadium("");
-                          }
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="Search or type stadium name (e.g. Anfield, Stamford Bridge...)"
+                        value={stadiumSearchQuery}
+                        onChange={e => {
+                          setStadiumSearchQuery(e.target.value);
+                          setJourneyStadium(e.target.value);
+                          setShowStadiumDropdown(true);
                         }}
-                        className={`p-3 rounded-xl border text-center font-bold text-xs cursor-pointer transition-all ${
-                          !["Emirates Stadium", "Anfield", "Santiago Bernabéu"].includes(journeyStadium)
-                            ? "bg-emerald-500/10 border-emerald-500 text-emerald-500"
-                            : "border-zinc-800 hover:border-zinc-700 bg-zinc-900/20 text-zinc-400"
-                        }`}
-                      >
-                        Custom Stadium...
-                      </button>
+                        onFocus={() => setShowStadiumDropdown(true)}
+                        className="w-full bg-zinc-900 border border-zinc-800 focus:border-emerald-500 rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-600 outline-none transition-colors"
+                      />
+                      {isSearchingStadiums && (
+                        <div className="absolute right-3 top-3">
+                          <div className="animate-spin rounded-full h-4 w-4 border-2 border-emerald-500 border-t-transparent" />
+                        </div>
+                      )}
                     </div>
 
-                    {!["Emirates Stadium", "Anfield", "Santiago Bernabéu"].includes(journeyStadium) && (
-                      <div className="pt-2">
-                        <input
-                          type="text"
-                          placeholder="Type custom stadium name (e.g. Stamford Bridge)"
-                          value={journeyStadium}
-                          onChange={e => setJourneyStadium(e.target.value)}
-                          className="w-full bg-zinc-900 border border-zinc-800 focus:border-emerald-500 rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-600 outline-none transition-colors"
-                        />
-                        <p className="text-[10px] text-zinc-500 mt-1 font-mono">
-                          *OSM Nominatim API will geocode this stadium coordinates for stay/route search.
-                        </p>
+                    {showStadiumDropdown && (
+                      <div className="absolute z-50 left-0 right-0 mt-1 max-h-60 overflow-y-auto bg-zinc-950 border border-zinc-800 rounded-xl shadow-2xl divide-y divide-zinc-900 scrollbar-thin">
+                        {filteredPopularStadiums.length > 0 && (
+                          <div className="p-2">
+                            <div className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider px-2 py-1">Popular Stadiums</div>
+                            {filteredPopularStadiums.map(name => (
+                              <button
+                                key={name}
+                                type="button"
+                                onClick={() => {
+                                  setJourneyStadium(name);
+                                  setStadiumSearchQuery(name);
+                                  setShowStadiumDropdown(false);
+                                }}
+                                className="w-full text-left px-3 py-2 text-xs text-white hover:bg-emerald-500/10 hover:text-emerald-400 rounded-lg transition-colors cursor-pointer"
+                              >
+                                🏟️ {name}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
+                        {stadiumSuggestions.length > 0 && (
+                          <div className="p-2">
+                            <div className="text-[9px] font-bold text-emerald-500 uppercase tracking-wider px-2 py-1">Search Results</div>
+                            {stadiumSuggestions.map(sug => {
+                              const displayName = sug.name || sug.display_name.split(",")[0];
+                              return (
+                                <button
+                                  key={sug.place_id || sug.osm_id}
+                                  type="button"
+                                  onClick={() => {
+                                    setJourneyStadium(displayName);
+                                    setStadiumSearchQuery(displayName);
+                                    setShowStadiumDropdown(false);
+                                  }}
+                                  className="w-full text-left px-3 py-2 hover:bg-emerald-500/10 rounded-lg transition-colors cursor-pointer"
+                                >
+                                  <div className="text-xs font-semibold text-white truncate">🏟️ {displayName}</div>
+                                  <div className="text-[9px] text-zinc-500 truncate mt-0.5">{sug.display_name}</div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {filteredPopularStadiums.length === 0 && stadiumSuggestions.length === 0 && !isSearchingStadiums && (
+                          <div className="p-4 text-center text-xs text-zinc-500">
+                            No stadiums found matching &ldquo;{stadiumSearchQuery}&rdquo;
+                          </div>
+                        )}
                       </div>
                     )}
+                    <p className="text-[10px] text-zinc-500 font-mono">
+                      *OSM Nominatim API will geocode this stadium coordinates to find nearby accommodations.
+                    </p>
                   </div>
                 </div>
 
@@ -2961,12 +4056,7 @@ export default function DashboardPage() {
       case "tickets":   return renderTickets();
       case "assistant": return renderAssistant();
       case "journey":   return renderJourney();
-      case "analysis":
-        return renderPlaceholder(
-          "Match Analysis",
-          "Deep statistical breakdowns, heat maps, player performance metrics, and AI-powered post-match summaries for your followed teams.",
-          <svg width="28" height="28" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M7.5 14.25v2.25m3-4.5v4.5m3-6.75v6.75m3-9v9M6 20.25h12A2.25 2.25 0 0 0 20.25 18V6A2.25 2.25 0 0 0 18 3.75H6A2.25 2.25 0 0 0 3.75 6v12A2.25 2.25 0 0 0 6 20.25Z" /></svg>
-        );
+      case "analysis":  return renderAnalysis();
       case "contact":
         return renderPlaceholder(
           "Contact Us",

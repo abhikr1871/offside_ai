@@ -57,7 +57,7 @@ export default function FloatingSettings() {
 
   return (
     <div 
-      className="fixed top-4 right-48 z-50 flex items-center gap-1.5 p-1 rounded-xl border backdrop-blur-md shadow-md"
+      className="fixed top-2 right-48 z-50 flex items-center gap-1.5 p-1 rounded-xl border backdrop-blur-md shadow-md"
       style={{
         background: "var(--card-bg)",
         borderColor: "var(--card-border)",

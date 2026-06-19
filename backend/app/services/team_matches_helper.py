@@ -151,6 +151,153 @@ TEAM_METADATA = {
     759: {"venue": "Olympiastadion", "city": "Berlin", "country": "Germany"},
 }
 
+REAL_FRIENDLIES_2026: Dict[int, List[Dict[str, Any]]] = {
+    # Arsenal (57)
+    57: [
+        {
+            "id": "friendly_57_1",
+            "homeTeam": "Arsenal", "awayTeam": "Real Betis", "homeTeamId": 57, "awayTeamId": 90,
+            "homeCrest": "https://crests.football-data.org/57.png", "awayCrest": "https://crests.football-data.org/90.png",
+            "homeScore": 0, "awayScore": 0, "minute": "", "isLive": False, "status": "SCHEDULED",
+            "venue": "Aviva Stadium", "city": "Dublin", "country": "Ireland",
+            "eventDate": "2026-08-05T19:00:00Z", "league": "Club Friendly", "league_code": "FRIENDLY",
+            "goals": [], "bookings": [], "sourceName": "Web Search"
+        },
+        {
+            "id": "friendly_57_2",
+            "homeTeam": "Manchester City", "awayTeam": "Arsenal", "homeTeamId": 65, "awayTeamId": 57,
+            "homeCrest": "https://crests.football-data.org/65.png", "awayCrest": "https://crests.football-data.org/57.png",
+            "homeScore": 0, "awayScore": 0, "minute": "", "isLive": False, "status": "SCHEDULED",
+            "venue": "Principality Stadium", "city": "Cardiff", "country": "Wales",
+            "eventDate": "2026-08-16T15:00:00Z", "league": "FA Community Shield", "league_code": "COMMUNITY_SHIELD",
+            "goals": [], "bookings": [], "sourceName": "Web Search"
+        }
+    ],
+    # Manchester City (65)
+    65: [
+        {
+            "id": "friendly_65_1",
+            "homeTeam": "Manchester City", "awayTeam": "Inter Milan", "homeTeamId": 65, "awayTeamId": 108,
+            "homeCrest": "https://crests.football-data.org/65.png", "awayCrest": "https://crests.football-data.org/108.png",
+            "homeScore": 0, "awayScore": 0, "minute": "", "isLive": False, "status": "SCHEDULED",
+            "venue": "Hong Kong Stadium", "city": "Hong Kong", "country": "Hong Kong",
+            "eventDate": "2026-08-01T12:00:00Z", "league": "Club Friendly", "league_code": "FRIENDLY",
+            "goals": [], "bookings": [], "sourceName": "Web Search"
+        },
+        {
+            "id": "friendly_57_2",
+            "homeTeam": "Manchester City", "awayTeam": "Arsenal", "homeTeamId": 65, "awayTeamId": 57,
+            "homeCrest": "https://crests.football-data.org/65.png", "awayCrest": "https://crests.football-data.org/57.png",
+            "homeScore": 0, "awayScore": 0, "minute": "", "isLive": False, "status": "SCHEDULED",
+            "venue": "Principality Stadium", "city": "Cardiff", "country": "Wales",
+            "eventDate": "2026-08-16T15:00:00Z", "league": "FA Community Shield", "league_code": "COMMUNITY_SHIELD",
+            "goals": [], "bookings": [], "sourceName": "Web Search"
+        }
+    ],
+    # Chelsea (61)
+    61: [
+        {
+            "id": "friendly_61_1",
+            "homeTeam": "Chelsea", "awayTeam": "W.S. Wanderers", "homeTeamId": 61, "awayTeamId": 9999,
+            "homeCrest": "https://crests.football-data.org/61.png", "awayCrest": "",
+            "homeScore": 0, "awayScore": 0, "minute": "", "isLive": False, "status": "SCHEDULED",
+            "venue": "CommBank Stadium", "city": "Sydney", "country": "Australia",
+            "eventDate": "2026-07-28T10:00:00Z", "league": "Club Friendly", "league_code": "FRIENDLY",
+            "goals": [], "bookings": [], "sourceName": "Web Search"
+        },
+        {
+            "id": "friendly_61_2",
+            "homeTeam": "Chelsea", "awayTeam": "Tottenham Hotspur", "homeTeamId": 61, "awayTeamId": 73,
+            "homeCrest": "https://crests.football-data.org/61.png", "awayCrest": "https://crests.football-data.org/73.png",
+            "homeScore": 0, "awayScore": 0, "minute": "", "isLive": False, "status": "SCHEDULED",
+            "venue": "Accor Stadium", "city": "Sydney", "country": "Australia",
+            "eventDate": "2026-08-01T11:00:00Z", "league": "Club Friendly", "league_code": "FRIENDLY",
+            "goals": [], "bookings": [], "sourceName": "Web Search"
+        },
+        {
+            "id": "friendly_61_3",
+            "homeTeam": "Chelsea", "awayTeam": "Juventus", "homeTeamId": 61, "awayTeamId": 109,
+            "homeCrest": "https://crests.football-data.org/61.png", "awayCrest": "https://crests.football-data.org/109.png",
+            "homeScore": 0, "awayScore": 0, "minute": "", "isLive": False, "status": "SCHEDULED",
+            "venue": "Hong Kong Stadium", "city": "Hong Kong", "country": "Hong Kong",
+            "eventDate": "2026-08-05T12:00:00Z", "league": "Club Friendly", "league_code": "FRIENDLY",
+            "goals": [], "bookings": [], "sourceName": "Web Search"
+        },
+        {
+            "id": "friendly_61_4",
+            "homeTeam": "Chelsea", "awayTeam": "AC Milan", "homeTeamId": 61, "awayTeamId": 98,
+            "homeCrest": "https://crests.football-data.org/61.png", "awayCrest": "https://crests.football-data.org/98.png",
+            "homeScore": 0, "awayScore": 0, "minute": "", "isLive": False, "status": "SCHEDULED",
+            "venue": "Gelora Bung Karno", "city": "Jakarta", "country": "Indonesia",
+            "eventDate": "2026-08-08T13:00:00Z", "league": "Club Friendly", "league_code": "FRIENDLY",
+            "goals": [], "bookings": [], "sourceName": "Web Search"
+        }
+    ],
+    # Liverpool (64)
+    64: [
+        {
+            "id": "friendly_64_1",
+            "homeTeam": "Liverpool", "awayTeam": "Sunderland", "homeTeamId": 64, "awayTeamId": 9998,
+            "homeCrest": "https://crests.football-data.org/64.png", "awayCrest": "",
+            "homeScore": 0, "awayScore": 0, "minute": "", "isLive": False, "status": "SCHEDULED",
+            "venue": "Nissan Stadium", "city": "Nashville", "country": "USA",
+            "eventDate": "2026-07-25T20:00:00Z", "league": "Club Friendly", "league_code": "FRIENDLY",
+            "goals": [], "bookings": [], "sourceName": "Web Search"
+        },
+        {
+            "id": "friendly_64_2",
+            "homeTeam": "Liverpool", "awayTeam": "AS Monaco", "homeTeamId": 64, "awayTeamId": 548,
+            "homeCrest": "https://crests.football-data.org/64.png", "awayCrest": "https://crests.football-data.org/548.png",
+            "homeScore": 0, "awayScore": 0, "minute": "", "isLive": False, "status": "SCHEDULED",
+            "venue": "Anfield", "city": "Liverpool", "country": "England",
+            "eventDate": "2026-08-09T15:00:00Z", "league": "Club Friendly", "league_code": "FRIENDLY",
+            "goals": [], "bookings": [], "sourceName": "Web Search"
+        },
+        {
+            "id": "friendly_64_3",
+            "homeTeam": "Liverpool", "awayTeam": "Como 1907", "homeTeamId": 64, "awayTeamId": 9995,
+            "homeCrest": "https://crests.football-data.org/64.png", "awayCrest": "",
+            "homeScore": 0, "awayScore": 0, "minute": "", "isLive": False, "status": "SCHEDULED",
+            "venue": "Anfield", "city": "Liverpool", "country": "England",
+            "eventDate": "2026-08-16T15:00:00Z", "league": "Club Friendly", "league_code": "FRIENDLY",
+            "goals": [], "bookings": [], "sourceName": "Web Search"
+        }
+    ],
+    # PSG (524)
+    524: [
+        {
+            "id": "friendly_524_1",
+            "homeTeam": "PSG", "awayTeam": "Manchester United", "homeTeamId": 524, "awayTeamId": 66,
+            "homeCrest": "https://crests.football-data.org/524.png", "awayCrest": "https://crests.football-data.org/66.png",
+            "homeScore": 0, "awayScore": 0, "minute": "", "isLive": False, "status": "SCHEDULED",
+            "venue": "Ullevi Stadium", "city": "Gothenburg", "country": "Sweden",
+            "eventDate": "2026-08-08T17:00:00Z", "league": "Club Friendly", "league_code": "FRIENDLY",
+            "goals": [], "bookings": [], "sourceName": "Web Search"
+        },
+        {
+            "id": "friendly_524_2",
+            "homeTeam": "PSG", "awayTeam": "Aston Villa", "homeTeamId": 524, "awayTeamId": 58,
+            "homeCrest": "https://crests.football-data.org/524.png", "awayCrest": "https://crests.football-data.org/58.png",
+            "homeScore": 0, "awayScore": 0, "minute": "", "isLive": False, "status": "SCHEDULED",
+            "venue": "Wörthersee Stadion", "city": "Klagenfurt", "country": "Austria",
+            "eventDate": "2026-08-12T20:00:00Z", "league": "UEFA Super Cup", "league_code": "UEFA_SUPER_CUP",
+            "goals": [], "bookings": [], "sourceName": "Web Search"
+        }
+    ],
+    # Bayern Munich (5)
+    5: [
+        {
+            "id": "friendly_5_1",
+            "homeTeam": "Bayern Munich", "awayTeam": "Aston Villa", "homeTeamId": 5, "awayTeamId": 58,
+            "homeCrest": "https://crests.football-data.org/5.png", "awayCrest": "https://crests.football-data.org/58.png",
+            "homeScore": 0, "awayScore": 0, "minute": "", "isLive": False, "status": "SCHEDULED",
+            "venue": "Hong Kong Stadium", "city": "Hong Kong", "country": "Hong Kong",
+            "eventDate": "2026-08-07T12:00:00Z", "league": "Club Friendly", "league_code": "FRIENDLY",
+            "goals": [], "bookings": [], "sourceName": "Web Search"
+        }
+    ]
+}
+
 
 async def fetch_team_matches(team_id: int, team_name: str, warnings: List[str] = None) -> List[Dict[str, Any]]:
     """
@@ -270,15 +417,16 @@ async def fetch_team_matches(team_id: int, team_name: str, warnings: List[str] =
 
     # ---------- 3. Normalise to frontend schema ----------
     normalized: List[Dict[str, Any]] = []
+    
+    # Check if we have real-world friendlies for this team to override the projection fallback
+    has_real_friendlies = team_id in REAL_FRIENDLIES_2026
+    
     # Sort raw_matches by date ascending so we can identify the latest ones
     sorted_raw = sorted(raw_matches, key=lambda x: x.get("utcDate") or "")
     total_raw = len(sorted_raw)
 
     for idx, m in enumerate(sorted_raw):
-        # We want to make the last 3 matches of the season appear as future upcoming matches
         is_projected_future = False
-        if total_raw - idx <= 3:
-            is_projected_future = True
 
         status_raw = (m.get("status") or "TIMED").upper()
 
@@ -387,6 +535,9 @@ async def fetch_team_matches(team_id: int, team_name: str, warnings: List[str] =
             "bookings":    normalized_bookings,
             "sourceName":  "Football-Data.org",
         })
+
+    if has_real_friendlies:
+        normalized.extend(REAL_FRIENDLIES_2026[team_id])
 
     # ---------- 4. Sort: live → upcoming → finished ----------
     live_m     = [x for x in normalized if x["status"] in {"LIVE", "HALF"}]

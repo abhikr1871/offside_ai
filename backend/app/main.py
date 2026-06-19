@@ -13,7 +13,8 @@ if sys.platform == "win32":
 # ──────────────────────────────────────────────────────────────────────────────
 
 # Load local environment variables from .env file
-load_dotenv(override=True)
+env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
+load_dotenv(dotenv_path=env_path, override=True)
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -25,6 +26,7 @@ from app.api.competitions import router as competitions_router, teams_router
 from app.api.auth import router as auth_router
 from app.api.agent import router as agent_router
 from app.api.tickets import router as tickets_router
+from app.api.analysis import router as analysis_router
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -63,6 +65,7 @@ app.include_router(teams_router)
 app.include_router(auth_router)
 app.include_router(agent_router)
 app.include_router(tickets_router)
+app.include_router(analysis_router)
 
 # Root Endpoint
 @app.get("/")
