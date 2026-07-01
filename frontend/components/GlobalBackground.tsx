@@ -80,6 +80,7 @@ export default function GlobalBackground() {
     >
       <video
         ref={videoRef}
+        src="/video2.mp4"
         className="w-full h-full object-cover bg-video-element"
         autoPlay
         muted
@@ -88,9 +89,7 @@ export default function GlobalBackground() {
         style={{
           pointerEvents: "none"
         }}
-      >
-        <source src="/video2.mp4" type="video/mp4" />
-      </video>
+      />
       <div 
         className="absolute inset-0 bg-video-overlay bg-white/25 dark:bg-[#090a0f]/50 backdrop-blur-[2px] bg-gradient-to-tr from-emerald-500/10 via-cyan-400/5 to-lime-500/10 dark:from-transparent dark:via-transparent dark:to-transparent transition-colors duration-300"
         style={{

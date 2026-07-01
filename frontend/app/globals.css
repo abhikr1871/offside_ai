@@ -49,9 +49,13 @@
   --font-mono: var(--font-mono);
 }
 
-body {
+html {
   background: var(--bg-gradient);
   background-attachment: fixed;
+}
+
+body {
+  background: transparent;
   color: var(--foreground);
   font-family: var(--font-outfit), Inter, Arial, sans-serif;
   transition: background-color 0.3s ease, color 0.3s ease;

@@ -86,6 +86,15 @@ TEAM_ID_MAP: Dict[str, int] = {
     "Olympique Lyonnais": 523,
     # National Teams
     "Germany": 759,
+    "Boca Juniors": 2061,
+    "CA Boca Juniors": 2061,
+    "Boca": 2061,
+    "FC Barcelona": 81,
+    "Barcelona": 81,
+    "Real Madrid CF": 86,
+    "Real Madrid": 86,
+    "Inter Miami CF": 9001,
+    "Inter Miami": 9001,
 }
 
 # Lookup metadata for stadiums, cities, and countries to backfill missing fields

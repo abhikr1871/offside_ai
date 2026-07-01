@@ -70,6 +70,30 @@ async def get_competition_standings(code: str):
             detail=f"Failed to fetch standings for '{code}': {exc}"
         )
 
+@teams_router.get("/directory/all", response_model=dict)
+async def get_teams_directory():
+    """
+    Return a rich directory of teams with crests, clubColors, venue, founded year, flags, etc.
+    This eliminates hardcoded crest mappings in the frontend.
+    """
+    try:
+        return await competitions_service.get_teams_directory()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch teams directory: {exc}")
+
+@teams_router.get("/by-name/{team_name}", response_model=TeamDetailedResponse)
+async def get_team_by_name(team_name: str):
+    """
+    Fetch detailed team info by team name (lazy loading from frontend).
+    Returns crest, area flag, clubColors, venue, coach, and squad list.
+    """
+    try:
+        return await competitions_service.fetch_team_by_name(team_name=team_name)
+    except Exception as exc:
+        if isinstance(exc, HTTPException):
+            raise exc
+        raise HTTPException(status_code=500, detail=f"Failed to fetch team info for {team_name}: {exc}")
+
 @teams_router.get("/{team_id}", response_model=TeamDetailedResponse)
 async def get_team_squad(team_id: int):
     """

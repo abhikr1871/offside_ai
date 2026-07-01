@@ -10,6 +10,11 @@ export default function FloatingSettings() {
   const syncStateFromDocument = () => {
     const isDark = document.documentElement.classList.contains("dark");
     setTheme(isDark ? "dark" : "light");
+    if (isDark) {
+      document.documentElement.style.background = "#090a0f";
+    } else {
+      document.documentElement.style.background = "#edf5f2";
+    }
 
     const isAnimOff = document.documentElement.classList.contains("no-bg-animation");
     setBgAnim(isAnimOff ? "off" : "on");
@@ -34,8 +39,10 @@ export default function FloatingSettings() {
     
     if (nextTheme === "dark") {
       document.documentElement.classList.add("dark");
+      document.documentElement.style.background = "#090a0f";
     } else {
       document.documentElement.classList.remove("dark");
+      document.documentElement.style.background = "#edf5f2";
     }
     
     window.dispatchEvent(new Event("theme-changed"));
@@ -78,7 +85,7 @@ export default function FloatingSettings() {
           </svg>
         ) : (
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="h-4.5 w-4.5 text-yellow-500">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m0 13.5V21m9-9h-2.25C18 12 12 7.25 12 1.5M12 18.75A6.75 6.75 0 1 0 12 5.25a6.75 6.75 0 0 0 0 13.5ZM3.75 12H1.5m18.75 0h-2.25m-1.932-6.364l-1.591 1.591M6.343 17.657l-1.591 1.591m12.728 0l-1.591-1.591M6.343 6.343L4.752 4.752" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m0 13.5V21m9.75-9h-2.25m-13.5 0H3m16.5-6.364l-1.591 1.591M6.343 17.657l-1.591 1.591m12.728 0l-1.591-1.591M6.343 6.343L4.752 4.752M12 7.5a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9z" />
           </svg>
         )}
       </button>

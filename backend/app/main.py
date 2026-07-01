@@ -27,6 +27,8 @@ from app.api.auth import router as auth_router
 from app.api.agent import router as agent_router
 from app.api.tickets import router as tickets_router
 from app.api.analysis import router as analysis_router
+from app.api.players import router as players_router
+from app.api.store import router as store_router
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -66,6 +68,8 @@ app.include_router(auth_router)
 app.include_router(agent_router)
 app.include_router(tickets_router)
 app.include_router(analysis_router)
+app.include_router(players_router)
+app.include_router(store_router)
 
 # Root Endpoint
 @app.get("/")
