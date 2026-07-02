@@ -157,37 +157,70 @@ The tactical battle in the midfield defined the pace of the game. {home_name}'s 
     if not agent_service.llm_model:
         return build_fallback_report("Gemini model is not configured")
         
-    prompt = f"""
-    You are an elite professional football tactical analyst and scout.
-    Analyze the following match details JSON:
-    {json.dumps(match_detail, indent=2)}
+    is_future = match_detail.get("status") not in ["FT", "FINISHED"] and not match_detail.get("goals")
 
-    Write a detailed, professional-grade post-match tactical report.
-    Provide:
-    1. **report_markdown**: A highly comprehensive, multi-section post-match analysis report written in markdown.
-       Include:
-       - ### Match Overview (Analysis of how the match flowed, tactical battles, key turning points)
-       - ### Tactical Setup & Game Plan (Evaluate formations, manager setups, defensive shapes)
-       - ### Manager Substitutions & Tactical Shifts (How tactical changes altered the game plan)
-       - ### Statistical Efficiency (xG, passing accuracy, press efficiency, defensive shapes)
-       - ### Scout's Notebook (Key notes for future fixtures)
-    2. **mvp_player**: Structure of MVP candidate.
-    3. **threat_momentum**: Estimate a list of 6 integers (representing 15-minute segments of the 90-minute match: 0-15', 15-30', 30-45', 45-60', 60-75', 75-90') representing the home team's threat percentage/dominance level (0-100 where >50 means home team dominating, <50 means away team dominating).
+    if is_future:
+        prompt = f"""
+        You are an elite professional football tactical analyst and scout.
+        Analyze the following UPCOMING match details JSON:
+        {json.dumps(match_detail, indent=2)}
 
-    Return ONLY a valid JSON object. Do not include markdown code block formatting or other text.
-    JSON Schema:
-    {{
-        "report_markdown": "string (formatted in Markdown, complete with headings, bold text, and lists)",
-        "mvp_player": {{
-            "name": "string",
-            "team": "string",
-            "shirtNumber": int,
-            "reason": "string"
-        }},
-        "threat_momentum": [int, int, int, int, int, int]
-    }}
-    JSON Response:
-    """
+        Since this match has not occurred yet, write a detailed, professional-grade PRE-MATCH PREDICTIVE PREVIEW.
+        Provide:
+        1. **report_markdown**: A highly comprehensive, multi-section pre-match predictive analysis report written in markdown.
+           Include:
+           - ### Pre-Match Overview (Form guide, stakes, and predictive narrative)
+           - ### Expected Tactical Setup (Evaluate expected formations, manager strategies, defensive shapes)
+           - ### Key Tactical Battlegrounds (Where the match will be won or lost)
+           - ### Statistical Forecast (Predicted xG, possession dominance, pressing intensity)
+           - ### Final Prediction (Scoreline prediction and reasoning)
+        2. **mvp_player**: Structure the likely "Player to Watch" or potential MVP.
+        3. **threat_momentum**: Estimate a PREDICTED list of 6 integers (representing 15-minute segments of the upcoming 90-minute match: 0-15', 15-30', 30-45', 45-60', 60-75', 75-90') representing the home team's predicted threat percentage/dominance level (0-100 where >50 means home team dominating).
+
+        Return ONLY a valid JSON object. Do not include markdown code block formatting or other text.
+        JSON Schema:
+        {{
+            "report_markdown": "string (formatted in Markdown, complete with headings, bold text, and lists)",
+            "mvp_player": {{
+                "name": "string",
+                "team": "string",
+                "shirtNumber": int,
+                "reason": "string"
+            }},
+            "threat_momentum": [int, int, int, int, int, int]
+        }}
+        """
+    else:
+        prompt = f"""
+        You are an elite professional football tactical analyst and scout.
+        Analyze the following completed match details JSON:
+        {json.dumps(match_detail, indent=2)}
+
+        Write a detailed, professional-grade post-match tactical report.
+        Provide:
+        1. **report_markdown**: A highly comprehensive, multi-section post-match analysis report written in markdown.
+           Include:
+           - ### Match Overview (Analysis of how the match flowed, tactical battles, key turning points)
+           - ### Tactical Setup & Game Plan (Evaluate formations, manager setups, defensive shapes)
+           - ### Manager Substitutions & Tactical Shifts (How tactical changes altered the game plan)
+           - ### Statistical Efficiency (xG, passing accuracy, press efficiency, defensive shapes)
+           - ### Scout's Notebook (Key notes for future fixtures)
+        2. **mvp_player**: Structure of MVP candidate.
+        3. **threat_momentum**: Estimate a list of 6 integers (representing 15-minute segments of the 90-minute match: 0-15', 15-30', 30-45', 45-60', 60-75', 75-90') representing the home team's threat percentage/dominance level (0-100 where >50 means home team dominating, <50 means away team dominating).
+
+        Return ONLY a valid JSON object. Do not include markdown code block formatting or other text.
+        JSON Schema:
+        {{
+            "report_markdown": "string (formatted in Markdown, complete with headings, bold text, and lists)",
+            "mvp_player": {{
+                "name": "string",
+                "team": "string",
+                "shirtNumber": int,
+                "reason": "string"
+            }},
+            "threat_momentum": [int, int, int, int, int, int]
+        }}
+        """
     
     try:
         response = agent_service.llm_model.generate_content(
@@ -330,6 +363,7 @@ async def search_match_by_prompt(req: Dict[str, Any]):
     "{prompt_query}"
 
     Search your knowledge base to find this match. If it is a real historical match, reconstruct its detailed statistics, lineups, goals, and bookings. If it is a hypothetical or less-known match, construct a realistic mock representation based on the user's description.
+    Make sure to provide extremely realistic statistical data (ball possession, shots, passes, saves) so that our frontend charting engine can beautifully render this match.
 
     Structure the response exactly as a JSON object matching this schema:
     {{

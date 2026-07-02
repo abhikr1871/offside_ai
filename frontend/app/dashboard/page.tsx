@@ -201,7 +201,7 @@ const DEFAULT_AI_PLANNING_STAGES: AIPlanningStage[] = [
   { id: "validate", label: "Validate and brief", brief: "Checking budget, route feasibility, safety grounding, and final fare." },
 ];
 
-type TabId = "dashboard" | "journey" | "tickets" | "assistant" | "analysis" | "contact" | "settings" | "store";
+type TabId = "dashboard" | "journey" | "tickets" | "assistant" | "analysis" | "store" | "contact" | "settings";
 
 const NAV_ITEMS: Array<{ id: TabId; label: string; icon: React.ReactNode; badge?: string }> = [
   {
@@ -251,6 +251,15 @@ const NAV_ITEMS: Array<{ id: TabId; label: string; icon: React.ReactNode; badge?
     ),
   },
   {
+    id: "store",
+    label: "Fans Store",
+    icon: (
+      <svg className="nav-icon" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 1 0-7.5 0v4.5m11.356-1.993 1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 0 1-1.12-1.243l1.264-12A1.125 1.125 0 0 1 5.513 7.5h12.974c.576 0 1.059.435 1.119 1.007ZM8.625 10.5a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm7.5 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
+      </svg>
+    ),
+  },
+  {
     id: "contact",
     label: "Contact Us",
     icon: (
@@ -266,15 +275,6 @@ const NAV_ITEMS: Array<{ id: TabId; label: string; icon: React.ReactNode; badge?
       <svg className="nav-icon" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
         <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-      </svg>
-    ),
-  },
-  {
-    id: "store",
-    label: "Fans Store",
-    icon: (
-      <svg className="nav-icon" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 1 0-7.5 0v4.5m11.356-1.993 1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 0 1-1.12-1.243l1.264-12A1.125 1.125 0 0 1 5.513 7.5h12.974c.576 0 1.059.435 1.119 1.007ZM8.625 10.5a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm7.5 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
       </svg>
     ),
   },
@@ -589,6 +589,18 @@ export default function DashboardPage() {
   const [showStayOptions, setShowStayOptions] = useState<boolean>(false);
   const [showRouteOptions, setShowRouteOptions] = useState<boolean>(false);
   const [activeStep5Section, setActiveStep5Section] = useState<string>("match");
+
+  // ── Contact & Support State ──────────────────────────────────────────────
+  const [contactForm, setContactForm] = useState({ name: "", email: "", subject: "booking_support", orderRef: "", message: "" });
+  const [contactSubmitting, setContactSubmitting] = useState<boolean>(false);
+  const [contactSubmitted, setContactSubmitted] = useState<boolean>(false);
+  const [openFaq, setOpenFaq] = useState<number | null>(0);
+
+  // ── Account Settings State ───────────────────────────────────────────────
+  const [settingsTab, setSettingsTab] = useState<string>("profile");
+  const [profileForm, setProfileForm] = useState({ displayName: "", favoriteClub: "CA Boca Juniors", currency: "USD ($)", oddsFormat: "Decimal (1.85)", defaultTravelMode: "transit" });
+  const [notifPreferences, setNotifPreferences] = useState({ liveGoals: true, ticketAlerts: true, gateReminders: true, matchRoundup: false, priceDrops: true });
+  const [settingsSaved, setSettingsSaved] = useState<boolean>(false);
 
   // ── Fetch followed matches ───────────────────────────────────────────────
   const fetchFollowedMatches = useCallback(async (userEmail: string) => {
@@ -2466,84 +2478,103 @@ export default function DashboardPage() {
   };
 
   const renderAnalysis = () => {
-    const completedMatches = followedMatches.filter(m => m.status === "FT");
-    const displayMatches = completedMatches.length > 0 ? completedMatches : followedMatches;
+    const completedMatches = followedMatches.filter(m => m.status === "FT" || m.status === "FINISHED");
+    const futureMatches = followedMatches.filter(m => m.status !== "FT" && m.status !== "FINISHED");
+    
     const activeMatchDetail = analysisMatchDetail;
+    const isFuture = activeMatchDetail && activeMatchDetail.status !== "FT" && activeMatchDetail.status !== "FINISHED" && activeMatchDetail.status !== "predicted";
 
     return (
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 w-full text-white min-h-[500px]">
         {/* Match Select Panel */}
         <div className="xl:col-span-12">
-          <div className="glass-card p-5 border border-zinc-800 bg-zinc-950/20 rounded-2xl">
-            <h3 className="text-sm font-extrabold uppercase tracking-widest text-emerald-400 font-mono mb-4">
-              📊 Match Statistics & AI Tactical Analysis
-            </h3>
-            <div className="flex flex-col gap-2">
-              <div className="flex justify-between items-center mb-1">
-                <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
-                  {isCustomAnalysisPrompt ? "Describe the Match to Find & Analyze" : "Select Completed Match"}
-                </label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsCustomAnalysisPrompt(!isCustomAnalysisPrompt);
-                    setAnalysisMatchDetail(null);
-                    setAnalysisSelectedMatchId(null);
-                    setAnalysisAIData(null);
-                    setAnalysisAIError(null);
-                  }}
-                  className="text-[10px] font-bold text-emerald-500 hover:text-emerald-400 cursor-pointer bg-emerald-500/10 border border-emerald-500/20 px-2 py-1 rounded transition-colors"
-                >
-                  {isCustomAnalysisPrompt ? "← Use Completed Matches Dropdown" : "🔍 Find Match with AI Prompt / Search"}
-                </button>
-              </div>
+          <div className="glass-card p-5 sm:p-6 border border-zinc-800 bg-zinc-950/40 rounded-2xl flex flex-col gap-5">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+              <h3 className="text-sm font-extrabold uppercase tracking-widest text-emerald-400 font-mono">
+                📊 Match Statistics & AI Tactical Analysis
+              </h3>
+            </div>
 
-              {isCustomAnalysisPrompt ? (
-                <div className="flex flex-col gap-2 mt-1">
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="e.g. Manchester City vs Inter Milan Champions League Final 2023, Rodri scored"
-                      value={customAnalysisPromptQuery}
-                      onChange={e => setCustomAnalysisPromptQuery(e.target.value)}
-                      className="flex-1 bg-zinc-900 border border-zinc-800 focus:border-emerald-500 rounded-xl px-4 py-2.5 text-xs text-white outline-none placeholder-zinc-500 transition-colors"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleSearchAnalysisMatchByPrompt}
-                      disabled={analysisLoading || !customAnalysisPromptQuery.trim()}
-                      className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-extrabold text-xs px-5 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0"
-                    >
-                      {analysisLoading ? "Searching..." : "Find & Analyze"}
-                    </button>
-                  </div>
-                  <div className="text-[10px] text-zinc-500 italic leading-relaxed">
-                    💡 Enter any details you remember (teams, year, player who scored, final score, or stadium) and our AI will reconstruct the exact match data!
-                  </div>
-                </div>
-              ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Left: Standard Selection */}
+              <div className="flex flex-col gap-2 border-r-0 md:border-r border-zinc-800/80 md:pr-6">
+                <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
+                  Select Tracked Match
+                </label>
                 <select
                   value={analysisSelectedMatchId || ""}
-                  onChange={(e) => handleSelectAnalysisMatch(e.target.value)}
-                  className="w-full bg-zinc-900 border border-zinc-800 focus:border-emerald-500 rounded-xl px-4 py-2.5 text-xs text-white outline-none transition-colors cursor-pointer"
+                  onChange={(e) => {
+                    handleSelectAnalysisMatch(e.target.value);
+                    setCustomAnalysisPromptQuery("");
+                  }}
+                  className="w-full bg-zinc-900/80 border border-zinc-800 focus:border-emerald-500 rounded-xl px-4 py-3 text-xs text-white outline-none transition-colors cursor-pointer shadow-inner"
                 >
                   <option value="">-- Choose a Match to Analyze --</option>
-                  {displayMatches.map(m => (
-                    <option key={m.id} value={m.id}>
-                      {m.homeTeam} {m.homeScore}-{m.awayScore} {m.awayTeam} ({m.venue || "Stadium"}) - {m.eventDate ? new Date(m.eventDate).toLocaleDateString() : "TBD Date"}
-                    </option>
-                  ))}
+                  
+                  {futureMatches.length > 0 && (
+                    <optgroup label="Upcoming / Predicted Matches" className="bg-zinc-950 text-zinc-300 font-bold">
+                      {futureMatches.map(m => (
+                        <option key={m.id} value={m.id} className="font-medium">
+                          {m.homeTeam} vs {m.awayTeam} (Pre-Match Preview)
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+
+                  {completedMatches.length > 0 && (
+                    <optgroup label="Completed Matches" className="bg-zinc-950 text-zinc-300 font-bold mt-2">
+                      {completedMatches.map(m => (
+                        <option key={m.id} value={m.id} className="font-medium">
+                          {m.homeTeam} {m.homeScore}-{m.awayScore} {m.awayTeam} (Post-Match Review)
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
                 </select>
-              )}
+                <div className="text-[10px] text-zinc-500 mt-1 leading-relaxed">
+                  Select an upcoming match to generate a <strong className="text-zinc-400">Predicted AI Preview</strong>, or a past match for <strong className="text-zinc-400">Tactical Breakdown</strong>.
+                </div>
+              </div>
+
+              {/* Right: AI Smart Search */}
+              <div className="flex flex-col gap-2">
+                <label className="text-[11px] font-bold text-violet-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 bg-violet-500 rounded-full animate-pulse" />
+                  AI Smart Search (Historical or Hypothetical)
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="e.g. Manchester City vs Inter Milan 2023 final, Rodri scores"
+                    value={customAnalysisPromptQuery}
+                    onChange={e => setCustomAnalysisPromptQuery(e.target.value)}
+                    className="flex-1 bg-violet-950/10 border border-violet-900/50 focus:border-violet-500 rounded-xl px-4 py-3 text-xs text-white outline-none placeholder-zinc-500 transition-colors shadow-inner"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSearchAnalysisMatchByPrompt}
+                    disabled={analysisLoading || !customAnalysisPromptQuery.trim()}
+                    className="bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-extrabold text-xs px-5 rounded-xl transition-all cursor-pointer flex items-center justify-center shrink-0 shadow-md shadow-violet-900/20"
+                  >
+                    {analysisLoading ? "Searching..." : "AI Generate"}
+                  </button>
+                </div>
+                <div className="text-[10px] text-zinc-500 italic mt-1 leading-relaxed">
+                  Can't find it? Type what you remember. Our AI will reconstruct the exact lineups, events, and statistical graphs for you.
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
         {/* Selected Match Dashboard */}
         {analysisLoading ? (
-          <div className="xl:col-span-12 flex flex-col items-center justify-center py-20 gap-3">
-            <span className="w-2.5 h-2.5 bg-emerald-400 rounded-full animate-ping" />
-            <div className="text-xs text-zinc-500 font-mono">Fetching match details & lineups...</div>
+          <div className="xl:col-span-12 flex flex-col items-center justify-center py-24 gap-4">
+            <div className="relative flex items-center justify-center w-12 h-12">
+              <span className="absolute inset-0 border-t-2 border-emerald-500 rounded-full animate-spin"></span>
+              <span className="absolute inset-1 border-r-2 border-violet-500 rounded-full animate-spin direction-reverse"></span>
+            </div>
+            <div className="text-xs text-zinc-400 font-mono tracking-widest uppercase">Fetching Match Data & AI Tactical Engine...</div>
           </div>
         ) : activeMatchDetail ? (
           <>
@@ -2553,11 +2584,11 @@ export default function DashboardPage() {
               <div className="glass-card p-5 border border-zinc-800 bg-zinc-950/20 rounded-2xl flex flex-col gap-4 text-center">
                 <div className="flex justify-between items-center">
                   <h4 className="text-xs font-extrabold uppercase tracking-wider text-emerald-400 font-mono">
-                    🏟️ Tactical Formations
+                    {isFuture ? "🔮 Expected Tactical Formations" : "🏟️ Tactical Formations"}
                   </h4>
                   <div className="flex gap-4 text-[10px] font-mono font-bold">
-                    <span className="text-emerald-400">{activeMatchDetail.homeTeam?.name}: {activeMatchDetail.homeTeam?.formation}</span>
-                    <span className="text-violet-400">{activeMatchDetail.awayTeam?.name}: {activeMatchDetail.awayTeam?.formation}</span>
+                    <span className="text-emerald-400">{activeMatchDetail.homeTeam?.name}: {activeMatchDetail.homeTeam?.formation || "TBD"}</span>
+                    <span className="text-violet-400">{activeMatchDetail.awayTeam?.name}: {activeMatchDetail.awayTeam?.formation || "TBD"}</span>
                   </div>
                 </div>
 
@@ -2574,8 +2605,8 @@ export default function DashboardPage() {
                     const coords = getPlayerCoordinates(p.position, idx, true);
                     return (
                       <div
-                        key={p.id}
-                        className="absolute group z-10 -translate-x-1/2 -translate-y-1/2 cursor-default"
+                        key={p.id || idx}
+                        className="absolute group z-10 -translate-x-1/2 -translate-y-1/2 cursor-default animate-fadeIn"
                         style={{ left: `${coords.x}%`, top: `${coords.y}%` }}
                       >
                         <div className="w-6 h-6 rounded-full bg-emerald-500 border border-emerald-300 flex items-center justify-center text-[10px] font-black text-black shadow-lg">
@@ -2593,8 +2624,8 @@ export default function DashboardPage() {
                     const coords = getPlayerCoordinates(p.position, idx, false);
                     return (
                       <div
-                        key={p.id}
-                        className="absolute group z-10 -translate-x-1/2 -translate-y-1/2 cursor-default"
+                        key={p.id || idx}
+                        className="absolute group z-10 -translate-x-1/2 -translate-y-1/2 cursor-default animate-fadeIn"
                         style={{ left: `${coords.x}%`, top: `${coords.y}%` }}
                       >
                         <div className="w-6 h-6 rounded-full bg-violet-600 border border-violet-400 flex items-center justify-center text-[10px] font-black text-white shadow-lg">
@@ -2611,12 +2642,13 @@ export default function DashboardPage() {
 
               {/* Match Stats Comparison */}
               <div className="glass-card p-5 border border-zinc-800 bg-zinc-950/20 rounded-2xl flex flex-col gap-4">
-                <h4 className="text-xs font-extrabold uppercase tracking-wider text-emerald-400 font-mono">
-                  📊 Match Performance Statistics
+                <h4 className="text-xs font-extrabold uppercase tracking-wider text-emerald-400 font-mono flex items-center justify-between">
+                  <span>{isFuture ? "📈 AI Predicted Match Statistics" : "📊 Match Performance Statistics"}</span>
+                  {isFuture && <span className="text-[9px] text-violet-400 bg-violet-500/10 px-2 py-0.5 rounded tracking-normal">FORECAST</span>}
                 </h4>
                 <div className="flex flex-col gap-3.5">
                   {renderAnalysisStatBar("Possession", activeMatchDetail.homeTeam?.statistics?.ball_possession ? `${activeMatchDetail.homeTeam.statistics.ball_possession}%` : "50%", activeMatchDetail.awayTeam?.statistics?.ball_possession ? `${activeMatchDetail.awayTeam.statistics.ball_possession}%` : "50%")}
-                  {renderAnalysisStatBar("Total Shots", activeMatchDetail.homeTeam?.statistics?.shots || 0, activeMatchDetail.awayTeam?.statistics?.shots || 0)}
+                  {renderAnalysisStatBar(isFuture ? "Expected Shots" : "Total Shots", activeMatchDetail.homeTeam?.statistics?.shots || 0, activeMatchDetail.awayTeam?.statistics?.shots || 0)}
                   {renderAnalysisStatBar("Shots on Target", activeMatchDetail.homeTeam?.statistics?.shots_on_goal || 0, activeMatchDetail.awayTeam?.statistics?.shots_on_goal || 0)}
                   {renderAnalysisStatBar("Passes Completed", activeMatchDetail.homeTeam?.statistics?.passes || 0, activeMatchDetail.awayTeam?.statistics?.passes || 0)}
                   {renderAnalysisStatBar("Pass Accuracy", activeMatchDetail.homeTeam?.statistics?.pass_accuracy ? `${activeMatchDetail.homeTeam.statistics.pass_accuracy}%` : "80%", activeMatchDetail.awayTeam?.statistics?.pass_accuracy ? `${activeMatchDetail.awayTeam.statistics.pass_accuracy}%` : "80%")}
@@ -2632,14 +2664,14 @@ export default function DashboardPage() {
               {/* Chronological Events Timeline */}
               <div className="glass-card p-5 border border-zinc-800 bg-zinc-950/20 rounded-2xl flex flex-col gap-4">
                 <h4 className="text-xs font-extrabold uppercase tracking-wider text-emerald-400 font-mono">
-                  🕒 Match Events Timeline
+                  {isFuture ? "🔮 AI Predicted Events Timeline" : "🕒 Match Events Timeline"}
                 </h4>
                 
                 <div className="flex flex-col gap-3 relative pl-4 border-l border-zinc-800">
                   {/* Goals */}
                   {activeMatchDetail.goals && activeMatchDetail.goals.length > 0 ? (
                     activeMatchDetail.goals.map((g: any, index: number) => {
-                      const isHomeGoal = g.teamId === activeMatchDetail.homeTeamId || g.teamId === activeMatchDetail.homeTeam?.id;
+                      const isHomeGoal = g.teamId === activeMatchDetail.homeTeamId || g.teamId === activeMatchDetail.homeTeam?.id || g.teamId === "home";
                       return (
                         <div className="relative flex flex-col items-start gap-0.5 text-left" key={`g-${index}`}>
                           <span className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-emerald-400 border border-zinc-950 flex items-center justify-center text-[7px]" />
@@ -2652,12 +2684,12 @@ export default function DashboardPage() {
                       );
                     })
                   ) : (
-                    <div className="text-zinc-600 text-xs text-left py-1">No goals recorded.</div>
+                    <div className="text-zinc-600 text-[11px] text-left py-1 italic">{isFuture ? "Awaiting kick-off..." : "No goals recorded."}</div>
                   )}
 
                   {/* Bookings */}
                   {activeMatchDetail.bookings && activeMatchDetail.bookings.map((b: any, index: number) => {
-                    const isHomeBooking = b.teamId === activeMatchDetail.homeTeamId || b.teamId === activeMatchDetail.homeTeam?.id;
+                    const isHomeBooking = b.teamId === activeMatchDetail.homeTeamId || b.teamId === activeMatchDetail.homeTeam?.id || b.teamId === "home";
                     const isRed = b.card === "RED";
                     return (
                       <div className="relative flex flex-col items-start gap-0.5 text-left mt-1" key={`b-${index}`}>
@@ -2677,7 +2709,7 @@ export default function DashboardPage() {
               <div className="glass-card p-5 border border-zinc-800 bg-zinc-950/20 rounded-2xl flex flex-col gap-4">
                 <div className="flex justify-between items-center">
                   <h4 className="text-xs font-extrabold uppercase tracking-wider text-emerald-400 font-mono">
-                    🤖 AI Scout Tactical review
+                    🤖 AI Scout {isFuture ? "Pre-Match Preview" : "Tactical Review"}
                   </h4>
                   {analysisAIData && (
                     <span className={`text-[8px] px-2 py-0.5 rounded font-mono font-bold ${
@@ -2695,8 +2727,8 @@ export default function DashboardPage() {
                       <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce mx-0.5" style={{ animationDelay: "150ms" }} />
                       <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce mx-0.5" style={{ animationDelay: "300ms" }} />
                     </div>
-                    <div className="text-[9px] font-mono text-zinc-500 text-center max-w-[200px]">
-                      Analyzing match stats, lineups, and events with Gemini...
+                    <div className="text-[9px] font-mono text-zinc-500 text-center max-w-[200px] leading-relaxed">
+                      Analyzing {isFuture ? "form, expected lineups, and strategic mismatches" : "match stats, actual lineups, and tactical events"} with Gemini AI...
                     </div>
                   </div>
                 ) : analysisAIData ? (
@@ -2706,15 +2738,15 @@ export default function DashboardPage() {
 
                     {/* MVP Player Spotlight */}
                     {analysisAIData.mvp_player && (
-                      <div className="bg-zinc-950/40 border border-zinc-800/80 p-4 rounded-xl flex items-start gap-3.5 text-left">
-                        <div className="w-9 h-9 rounded-full bg-violet-950 border border-violet-500/30 flex items-center justify-center font-black text-xs text-violet-300">
+                      <div className="bg-zinc-950/60 border border-zinc-800/80 p-4 rounded-xl flex items-start gap-4 text-left shadow-lg">
+                        <div className="w-10 h-10 shrink-0 rounded-full bg-violet-950 border border-violet-500/30 flex items-center justify-center font-black text-sm text-violet-300">
                           {analysisAIData.mvp_player.shirtNumber || 10}
                         </div>
                         <div className="flex-1 flex flex-col gap-1">
-                          <div className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Match MVP Candidate</div>
+                          <div className="text-[9px] font-mono text-violet-400 uppercase tracking-widest">{isFuture ? "Key Player to Watch" : "Match MVP Candidate"}</div>
                           <div className="text-xs font-extrabold text-zinc-100">{analysisAIData.mvp_player.name}</div>
                           <div className="text-[9px] font-bold text-zinc-400">{analysisAIData.mvp_player.team}</div>
-                          <p className="text-[10px] text-zinc-400 leading-relaxed mt-1">
+                          <p className="text-[10px] text-zinc-300 leading-relaxed mt-1.5 border-t border-zinc-800/50 pt-1.5">
                             {analysisAIData.mvp_player.reason}
                           </p>
                         </div>
@@ -2728,12 +2760,12 @@ export default function DashboardPage() {
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center py-10 gap-3">
-                    <p className="text-xs text-zinc-500">No tactical report loaded yet.</p>
+                    <p className="text-xs text-zinc-500">{isFuture ? "No prediction generated yet." : "No tactical report loaded yet."}</p>
                     <button
                       onClick={handleGenerateTacticalBreakdown}
                       className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition-colors cursor-pointer"
                     >
-                      Generate AI Tactical Breakdown
+                      Generate AI {isFuture ? "Pre-Match Preview" : "Tactical Breakdown"}
                     </button>
                   </div>
                 )}
@@ -2748,14 +2780,12 @@ export default function DashboardPage() {
           </>
         ) : (
           <div className="xl:col-span-12 glass-card p-12 text-center border border-zinc-800">
-            <p className="text-xs text-zinc-500">Please select a completed match above to load lineups, events, and stats comparisons.</p>
+            <p className="text-xs text-zinc-500">Please select a match or use the AI Smart Search to generate deep statistical analytics.</p>
           </div>
         )}
       </div>
     );
   };
-
-
   const renderAssistant = () => {
     const renderAssistantMd = (text: string) => {
       return text.split("\n").map((line, i) => {
@@ -3039,6 +3069,549 @@ export default function DashboardPage() {
       </div>
     </div>
   );
+
+  // ── Professional Contact & Support Center ─────────────────────────────────
+  const renderContact = () => {
+    const handleContactSubmit = (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!contactForm.message.trim()) return;
+      setContactSubmitting(true);
+      setTimeout(() => {
+        setContactSubmitting(false);
+        setContactSubmitted(true);
+      }, 1000);
+    };
+
+    const faqs = [
+      {
+        q: "When will I receive my digital matchday tickets?",
+        a: "Digital mobile tickets are securely delivered to your Offside AI account and verified email address 48 to 72 hours prior to kick-off, complying with official club security and anti-scalping protocols."
+      },
+      {
+        q: "What is your policy if a fixture is rescheduled or postponed?",
+        a: "If a match date or kick-off time is adjusted by the league or television broadcasters, your existing booking remains 100% valid for the rescheduled fixture. If you cannot attend the new date, our automated resale portal allows you to list your seats up to 5 days prior."
+      },
+      {
+        q: "How does the integrated Matchday Route Planner work?",
+        a: "Our Route Planner combines real-time metro timetables, train schedules, and airport transfers directly from your saved Home City to the stadium turnstiles, avoiding known road closures and matchday congestion."
+      },
+      {
+        q: "How are stadium sightlines and seat view ratings verified?",
+        a: "Our sightline ratings are compiled from official stadium architectural drawings and verified attendee feedback, ensuring you know exact sun angles, roof coverage, and pitch visibility before finalizing your booking."
+      }
+    ];
+
+    return (
+      <div className="flex flex-col gap-8 w-full text-white pb-16 font-sans animate-fadeIn">
+        {/* Top Header */}
+        <div className="bg-zinc-900/60 border border-zinc-800/80 p-6 sm:p-8 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <h3 className="text-lg font-bold text-white tracking-tight">Help & Customer Support</h3>
+            <p className="text-xs text-zinc-400 mt-1">We are here to assist with your ticket bookings, travel itineraries, stadium access, and account inquiries.</p>
+          </div>
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span>Support Desk Open 24/7</span>
+          </div>
+        </div>
+
+        {/* Quick Support Channels */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          <div className="bg-zinc-950/60 border border-zinc-800/80 p-5 rounded-2xl flex flex-col justify-between gap-3 hover:border-zinc-700 transition-colors">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-lg">🎟️</div>
+              <div>
+                <h4 className="text-sm font-semibold text-white">Ticket & Booking Assistance</h4>
+                <p className="text-[11px] text-zinc-400 mt-0.5">Seat allocations, mobile ticket delivery, or payment queries.</p>
+              </div>
+            </div>
+            <div className="text-[11px] font-medium text-emerald-400 border-t border-zinc-800/80 pt-2.5 flex items-center justify-between">
+              <span>Average response: &lt;15 mins</span>
+              <span>Priority Support →</span>
+            </div>
+          </div>
+
+          <div className="bg-zinc-950/60 border border-zinc-800/80 p-5 rounded-2xl flex flex-col justify-between gap-3 hover:border-zinc-700 transition-colors">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-lg">🏟️</div>
+              <div>
+                <h4 className="text-sm font-semibold text-white">Matchday Access & Travel</h4>
+                <p className="text-[11px] text-zinc-400 mt-0.5">Turnstile navigation, gate opening times, or transit updates.</p>
+              </div>
+            </div>
+            <div className="text-[11px] font-medium text-cyan-400 border-t border-zinc-800/80 pt-2.5 flex items-center justify-between">
+              <span>Live Matchday Desk</span>
+              <span>View Guides →</span>
+            </div>
+          </div>
+
+          <div className="bg-zinc-950/60 border border-zinc-800/80 p-5 rounded-2xl flex flex-col justify-between gap-3 hover:border-zinc-700 transition-colors">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-lg">🤝</div>
+              <div>
+                <h4 className="text-sm font-semibold text-white">Partnerships & Hospitality</h4>
+                <p className="text-[11px] text-zinc-400 mt-0.5">Corporate suites, group bookings, or club licensing inquiries.</p>
+              </div>
+            </div>
+            <div className="text-[11px] font-medium text-amber-400 border-t border-zinc-800/80 pt-2.5 flex items-center justify-between">
+              <span>Dedicated Manager</span>
+              <span>Inquire Now →</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Main Section: Contact Form vs FAQ */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          {/* Left: Contact Form */}
+          <div className="lg:col-span-7 bg-zinc-950/80 border border-zinc-800/80 p-6 sm:p-8 rounded-2xl shadow-xl flex flex-col justify-between">
+            <div>
+              <h4 className="text-base font-semibold text-white pb-4 border-b border-zinc-800/80 mb-6">Send Us a Message</h4>
+
+              {contactSubmitted ? (
+                <div className="bg-zinc-900/80 border border-emerald-500/30 rounded-xl p-8 text-center flex flex-col items-center justify-center gap-3 my-4">
+                  <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xl font-bold">[OK]</div>
+                  <h5 className="text-base font-semibold text-white mt-1">Inquiry Submitted Successfully</h5>
+                  <p className="text-xs text-zinc-300 max-w-md mx-auto leading-relaxed">
+                    Thank you for reaching out. A support representative has received your request and will reply to your connected email within 15 minutes.
+                  </p>
+                  <button
+                    onClick={() => { setContactSubmitted(false); setContactForm({ ...contactForm, message: "", orderRef: "" }); }}
+                    className="mt-3 bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors cursor-pointer"
+                  >
+                    Send Another Message
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleContactSubmit} className="flex flex-col gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-300 mb-1.5">Your Name</label>
+                      <input
+                        type="text"
+                        required
+                        value={contactForm.name || userProfile?.name || ""}
+                        onChange={e => setContactForm({ ...contactForm, name: e.target.value })}
+                        placeholder="Alex Ferguson"
+                        className="w-full bg-zinc-900 border border-zinc-800 focus:border-zinc-600 rounded-lg px-3.5 py-2.5 text-xs text-white focus:outline-none transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-300 mb-1.5">Email Address</label>
+                      <input
+                        type="email"
+                        required
+                        value={contactForm.email || email || ""}
+                        onChange={e => setContactForm({ ...contactForm, email: e.target.value })}
+                        placeholder="alex@manutd.co.uk"
+                        className="w-full bg-zinc-900 border border-zinc-800 focus:border-zinc-600 rounded-lg px-3.5 py-2.5 text-xs text-white focus:outline-none transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-300 mb-1.5">Inquiry Subject</label>
+                      <select
+                        value={contactForm.subject}
+                        onChange={e => setContactForm({ ...contactForm, subject: e.target.value })}
+                        className="w-full bg-zinc-900 border border-zinc-800 focus:border-zinc-600 rounded-lg px-3.5 py-2.5 text-xs text-white focus:outline-none transition-all cursor-pointer"
+                      >
+                        <option value="booking_support">Ticket Booking & Seat Selection</option>
+                        <option value="ticket_delivery">Mobile Ticket Delivery & Gate Entry</option>
+                        <option value="travel_support">Travel & Route Planning Assistance</option>
+                        <option value="billing_refunds">Billing, Refunds & Payments</option>
+                        <option value="hospitality">VIP Hospitality & Corporate Boxes</option>
+                        <option value="general">General Feedback & Suggestions</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-300 mb-1.5">Order / Reference # (Optional)</label>
+                      <input
+                        type="text"
+                        value={contactForm.orderRef}
+                        onChange={e => setContactForm({ ...contactForm, orderRef: e.target.value })}
+                        placeholder="e.g. #OFS-8492"
+                        className="w-full bg-zinc-900 border border-zinc-800 focus:border-zinc-600 rounded-lg px-3.5 py-2.5 text-xs text-white focus:outline-none transition-all font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-300 mb-1.5">Message</label>
+                    <textarea
+                      rows={4}
+                      required
+                      value={contactForm.message}
+                      onChange={e => setContactForm({ ...contactForm, message: e.target.value })}
+                      placeholder="Please provide details regarding your inquiry or assistance request..."
+                      className="w-full bg-zinc-900 border border-zinc-800 focus:border-zinc-600 rounded-lg p-3.5 text-xs text-white focus:outline-none transition-all resize-none leading-relaxed"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={contactSubmitting}
+                    className="w-full mt-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs py-3 rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {contactSubmitting ? (
+                      <>
+                        <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span>Sending Message...</span>
+                      </>
+                    ) : (
+                      <span>Submit Inquiry</span>
+                    )}
+                  </button>
+                </form>
+              )}
+            </div>
+
+            <div className="mt-6 pt-4 border-t border-zinc-800/80 flex items-center justify-between text-[11px] text-zinc-500">
+              <span>Secure SSL Encrypted Channel</span>
+              <span>Offside Support Center • London & Buenos Aires</span>
+            </div>
+          </div>
+
+          {/* Right: FAQ & Direct Contact */}
+          <div className="lg:col-span-5 flex flex-col gap-6">
+            <div className="bg-zinc-950/80 border border-zinc-800/80 p-6 rounded-2xl shadow-xl">
+              <h4 className="text-base font-semibold text-white mb-4">Frequently Asked Questions</h4>
+
+              <div className="flex flex-col gap-2.5">
+                {faqs.map((faq, idx) => {
+                  const isOpen = openFaq === idx;
+                  return (
+                    <div
+                      key={idx}
+                      className={`border rounded-xl overflow-hidden transition-all ${
+                        isOpen ? "bg-zinc-900/80 border-zinc-700 shadow-sm" : "bg-zinc-950/40 border-zinc-800/80 hover:border-zinc-700"
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setOpenFaq(isOpen ? null : idx)}
+                        className="w-full p-3.5 text-left flex items-center justify-between gap-3 text-xs font-medium text-zinc-200 hover:text-white transition-colors cursor-pointer"
+                      >
+                        <span className="leading-snug">{faq.q}</span>
+                        <span className={`text-xs transition-transform duration-200 ${isOpen ? "rotate-180 text-emerald-400" : "text-zinc-500"}`}>▼</span>
+                      </button>
+                      {isOpen && (
+                        <div className="px-3.5 pb-3.5 text-xs text-zinc-400 leading-relaxed border-t border-zinc-800/60 pt-2.5">
+                          {faq.a}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Direct Contact Details Box */}
+            <div className="bg-zinc-900/60 border border-zinc-800/80 p-6 rounded-2xl shadow-lg flex flex-col gap-3">
+              <h4 className="text-xs font-bold text-zinc-300 uppercase tracking-wider">Direct Contact Details</h4>
+              <div className="flex flex-col gap-2 text-xs text-zinc-300 mt-1">
+                <div className="flex items-center justify-between py-1.5 border-b border-zinc-800/60">
+                  <span className="text-zinc-400">Email Support:</span>
+                  <span className="font-mono text-emerald-400">support@offside.ai</span>
+                </div>
+                <div className="flex items-center justify-between py-1.5 border-b border-zinc-800/60">
+                  <span className="text-zinc-400">Telephone Helpline:</span>
+                  <span className="font-mono">+44 (0) 20 7946 0192</span>
+                </div>
+                <div className="flex items-center justify-between py-1.5">
+                  <span className="text-zinc-400">Operating Hours:</span>
+                  <span>24/7 Matchdays • Mon-Fri 8am-8pm</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ── Professional Account & Preferences Center ─────────────────────────────
+  const renderSettings = () => {
+    const handleSaveSettings = () => {
+      setSettingsSaved(true);
+      setTimeout(() => setSettingsSaved(false), 3000);
+    };
+
+    return (
+      <div className="flex flex-col gap-8 w-full text-white pb-16 font-sans animate-fadeIn">
+        {/* Top Header */}
+        <div className="bg-zinc-900/60 border border-zinc-800/80 p-6 sm:p-8 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <h3 className="text-lg font-bold text-white tracking-tight">Account & Preferences</h3>
+            <p className="text-xs text-zinc-400 mt-1">Manage your profile details, matchday notifications, ticketing defaults, and display settings.</p>
+          </div>
+          <div className="flex items-center gap-3 self-start sm:self-auto">
+            {settingsSaved && (
+              <span className="text-xs font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 rounded-lg">
+                [OK] Preferences Saved
+              </span>
+            )}
+            <button
+              onClick={handleSaveSettings}
+              className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-5 py-2.5 rounded-xl shadow-sm transition-all cursor-pointer flex items-center gap-2"
+            >
+              <span>Save Changes</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Navigation Tabs */}
+        <div className="flex flex-wrap gap-2 border-b border-zinc-800/80 pb-4">
+          {[
+            { id: "profile", label: "Profile & Preferences", icon: "👤" },
+            { id: "notifications", label: "Notifications & Alerts", icon: "🔔" },
+            { id: "security", label: "Security & Account", icon: "🔒" }
+          ].map(t => (
+            <button
+              key={t.id}
+              onClick={() => setSettingsTab(t.id)}
+              className={`px-4 py-2.5 rounded-xl text-xs font-medium border transition-all cursor-pointer flex items-center gap-2 ${
+                settingsTab === t.id
+                  ? "bg-zinc-800 border-zinc-700 text-white shadow-sm"
+                  : "bg-zinc-950/60 border-zinc-800/80 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+              }`}
+            >
+              <span>{t.icon}</span>
+              <span>{t.label}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Tab 1: Profile & Preferences */}
+        {settingsTab === "profile" && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fadeIn">
+            {/* Card 1: Personal Profile */}
+            <div className="bg-zinc-950/80 border border-zinc-800/80 p-6 rounded-2xl shadow-lg flex flex-col justify-between gap-5">
+              <div>
+                <h4 className="text-sm font-semibold text-white mb-1">Personal Profile</h4>
+                <p className="text-xs text-zinc-400 mb-4">Your display identity and primary club affiliation for match recommendations.</p>
+                
+                <div className="flex flex-col gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-300 mb-1.5">Display Name</label>
+                    <input
+                      type="text"
+                      value={profileForm.displayName || userProfile?.name || ""}
+                      onChange={e => setProfileForm({ ...profileForm, displayName: e.target.value })}
+                      placeholder="Alex Ferguson"
+                      className="w-full bg-zinc-900 border border-zinc-800 focus:border-zinc-600 rounded-lg px-3.5 py-2.5 text-xs text-white focus:outline-none transition-all"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-300 mb-1.5">Connected Email Address</label>
+                    <input
+                      type="email"
+                      disabled
+                      value={email || "alex@manutd.co.uk"}
+                      className="w-full bg-zinc-900/50 border border-zinc-800 text-zinc-500 rounded-lg px-3.5 py-2.5 text-xs cursor-not-allowed"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-300 mb-1.5">Favorite Club Affiliation</label>
+                    <select
+                      value={profileForm.favoriteClub}
+                      onChange={e => setProfileForm({ ...profileForm, favoriteClub: e.target.value })}
+                      className="w-full bg-zinc-900 border border-zinc-800 focus:border-zinc-600 rounded-lg px-3.5 py-2.5 text-xs text-white focus:outline-none transition-all cursor-pointer"
+                    >
+                      <option value="CA Boca Juniors">CA Boca Juniors</option>
+                      <option value="River Plate">River Plate</option>
+                      <option value="Real Madrid">Real Madrid</option>
+                      <option value="Manchester United">Manchester United</option>
+                      <option value="Arsenal">Arsenal</option>
+                      <option value="FC Barcelona">FC Barcelona</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-300 mb-1.5">Home Base City (For Travel Routing)</label>
+                    <input
+                      type="text"
+                      value={journeyOrigin || "Buenos Aires, Argentina"}
+                      onChange={e => setJourneyOrigin(e.target.value)}
+                      placeholder="e.g. London, UK"
+                      className="w-full bg-zinc-900 border border-zinc-800 focus:border-zinc-600 rounded-lg px-3.5 py-2.5 text-xs text-white focus:outline-none transition-all"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Card 2: Display & Ticketing Defaults */}
+            <div className="bg-zinc-950/80 border border-zinc-800/80 p-6 rounded-2xl shadow-lg flex flex-col justify-between gap-5">
+              <div>
+                <h4 className="text-sm font-semibold text-white mb-1">Display & Ticketing Defaults</h4>
+                <p className="text-xs text-zinc-400 mb-4">Set your default currency, betting odds presentation, and travel routing mode.</p>
+
+                <div className="flex flex-col gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-300 mb-1.5">Preferred Currency</label>
+                    <select
+                      value={profileForm.currency}
+                      onChange={e => setProfileForm({ ...profileForm, currency: e.target.value })}
+                      className="w-full bg-zinc-900 border border-zinc-800 focus:border-zinc-600 rounded-lg px-3.5 py-2.5 text-xs text-white focus:outline-none transition-all cursor-pointer"
+                    >
+                      <option value="USD ($)">USD ($) - US Dollar</option>
+                      <option value="EUR (€)">EUR (€) - Euro</option>
+                      <option value="GBP (£)">GBP (£) - British Pound</option>
+                      <option value="ARS ($)">ARS ($) - Argentine Peso</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-300 mb-1.5">Odds Display Format</label>
+                    <select
+                      value={profileForm.oddsFormat}
+                      onChange={e => setProfileForm({ ...profileForm, oddsFormat: e.target.value })}
+                      className="w-full bg-zinc-900 border border-zinc-800 focus:border-zinc-600 rounded-lg px-3.5 py-2.5 text-xs text-white focus:outline-none transition-all cursor-pointer"
+                    >
+                      <option value="Decimal (1.85)">Decimal (e.g. 1.85)</option>
+                      <option value="Fractional (17/20)">Fractional (e.g. 17/20)</option>
+                      <option value="American (-118)">American (e.g. -118)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-300 mb-1.5">Default Travel & Routing Mode</label>
+                    <select
+                      value={profileForm.defaultTravelMode}
+                      onChange={e => setProfileForm({ ...profileForm, defaultTravelMode: e.target.value })}
+                      className="w-full bg-zinc-900 border border-zinc-800 focus:border-zinc-600 rounded-lg px-3.5 py-2.5 text-xs text-white focus:outline-none transition-all cursor-pointer"
+                    >
+                      <option value="transit">Public Transit & Metro</option>
+                      <option value="driving">Driving & Taxi Transfers</option>
+                      <option value="flight">Flights & High-Speed Rail</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-300 mb-1.5">System Timezone</label>
+                    <input
+                      type="text"
+                      disabled
+                      value="Local System Time (Auto-Detected)"
+                      className="w-full bg-zinc-900/50 border border-zinc-800 text-zinc-500 rounded-lg px-3.5 py-2.5 text-xs cursor-not-allowed"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tab 2: Notifications & Alerts */}
+        {settingsTab === "notifications" && (
+          <div className="bg-zinc-950/80 border border-zinc-800/80 p-6 sm:p-8 rounded-2xl shadow-lg animate-fadeIn max-w-3xl">
+            <h4 className="text-base font-semibold text-white mb-1">Matchday & Ticketing Alerts</h4>
+            <p className="text-xs text-zinc-400 mb-6">Choose when and how you receive updates regarding match scores, turnstile entry, and ticket availability.</p>
+            
+            <div className="flex flex-col gap-3.5">
+              {[
+                { id: "liveGoals", label: "Live Goal & Match Score Alerts", desc: "Receive immediate visual updates when a followed team scores, concedes, or suffers a red card during play.", val: notifPreferences.liveGoals },
+                { id: "ticketAlerts", label: "Ticket Availability & Price Drops", desc: "Notify when new seat allocations are released or prices drop for your bookmarked upcoming matches.", val: notifPreferences.ticketAlerts },
+                { id: "gateReminders", label: "Stadium Gate Opening Reminders", desc: "Receive automated digital alerts 2 hours prior to kick-off with turnstile entry directions.", val: notifPreferences.gateReminders },
+                { id: "matchRoundup", label: "Weekly Matchup & Travel Roundup", desc: "Receive a curated email summary of weekend fixtures, ticket rates, and transit advisories.", val: notifPreferences.matchRoundup }
+              ].map((notif: any) => (
+                <div key={notif.id} className="bg-zinc-900/50 border border-zinc-800/80 p-4 rounded-xl flex items-center justify-between gap-4">
+                  <div>
+                    <div className="text-xs font-semibold text-white">{notif.label}</div>
+                    <div className="text-[11px] text-zinc-400 mt-0.5 leading-relaxed">{notif.desc}</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setNotifPreferences({ ...notifPreferences, [notif.id]: !notif.val })}
+                    className={`w-11 h-6 rounded-full transition-all relative p-0.5 cursor-pointer flex items-center ${notif.val ? "bg-emerald-600" : "bg-zinc-700"}`}
+                  >
+                    <div className={`w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${notif.val ? "translate-x-5" : "translate-x-0"}`} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Tab 3: Security & Account */}
+        {settingsTab === "security" && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fadeIn">
+            {/* Security */}
+            <div className="bg-zinc-950/80 border border-zinc-800/80 p-6 sm:p-8 rounded-2xl shadow-lg flex flex-col justify-between gap-6">
+              <div>
+                <h4 className="text-base font-semibold text-white mb-1">Account Security</h4>
+                <p className="text-xs text-zinc-400 mb-6">Manage authentication settings and protect your connected ticketing profile.</p>
+
+                <div className="flex flex-col gap-4 text-xs">
+                  <div className="p-4 bg-zinc-900/60 border border-zinc-800 rounded-xl flex justify-between items-center">
+                    <div>
+                      <div className="font-semibold text-white">Password Protection</div>
+                      <div className="text-[11px] text-zinc-400 mt-0.5">Last changed 30 days ago</div>
+                    </div>
+                    <button type="button" className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-xs font-medium transition-colors cursor-pointer">
+                      Change Password
+                    </button>
+                  </div>
+
+                  <div className="p-4 bg-zinc-900/60 border border-zinc-800 rounded-xl flex justify-between items-center">
+                    <div>
+                      <div className="font-semibold text-white">Two-Factor Authentication</div>
+                      <div className="text-[11px] text-zinc-400 mt-0.5">Secure your match ticket bookings</div>
+                    </div>
+                    <button type="button" className="px-3 py-1.5 bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 rounded-lg text-xs font-medium transition-colors cursor-pointer">
+                      Enable 2FA
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="text-[11px] text-zinc-500">
+                Active Session: Windows Client • IP Verified
+              </div>
+            </div>
+
+            {/* Data & Privacy */}
+            <div className="bg-zinc-950/80 border border-zinc-800/80 p-6 sm:p-8 rounded-2xl shadow-lg flex flex-col justify-between gap-6">
+              <div>
+                <h4 className="text-base font-semibold text-white mb-1">Data & Privacy</h4>
+                <p className="text-xs text-zinc-400 mb-6">Download your personal ticketing archive or manage session status.</p>
+                
+                <div className="flex flex-col gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ profile: userProfile, tickets: tickets, followedMatches: followedMatches, exportDate: new Date() }, null, 2));
+                      const dlAnchorElem = document.createElement("a");
+                      dlAnchorElem.setAttribute("href", dataStr);
+                      dlAnchorElem.setAttribute("download", `offside_ai_bookings_${Date.now()}.json`);
+                      dlAnchorElem.click();
+                    }}
+                    className="w-full bg-zinc-900 hover:bg-zinc-800 text-white border border-zinc-700 font-medium text-xs py-3 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <span>Download Bookings Archive (.JSON)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => { localStorage.clear(); window.location.href = "/login"; }}
+                    className="w-full bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 font-medium text-xs py-3 rounded-xl transition-all cursor-pointer text-center mt-2"
+                  >
+                    Sign Out & Clear Session
+                  </button>
+                </div>
+              </div>
+              <div className="text-[11px] text-zinc-500 text-center">
+                100% Data Privacy Compliant • Zero Third-Party Ad Trackers
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const renderJourney = () => {
     const handleFetchStays = async () => {
@@ -5300,17 +5873,9 @@ All 5 travel modes (Train, Flight, Metro, Road Trip, and Rideshare) have been up
       case "journey":   return renderJourney();
       case "analysis":  return renderAnalysis();
       case "contact":
-        return renderPlaceholder(
-          "Contact Us",
-          "Reach out to the Offside AI support team for technical help, feature requests, or partnership enquiries.",
-          <svg width="28" height="28" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" /></svg>
-        );
+        return renderContact();
       case "settings":
-        return renderPlaceholder(
-          "Settings",
-          "Manage your account preferences, notification settings, theme configuration, and connected data sources.",
-          <svg width="28" height="28" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /></svg>
-        );
+        return renderSettings();
     }
   };
 
