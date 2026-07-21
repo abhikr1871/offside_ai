@@ -39,9 +39,7 @@
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts",
-    ".next_local/types/**/*.ts",
-    "next-env.d.ts",
-    "../../../../AppData/Local/offside-ai-next-sandbox/types/**/*.ts"
+    "next-env.d.ts"
   ],
   "exclude": [
     "node_modules"
