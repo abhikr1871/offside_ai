@@ -120,7 +120,7 @@ interface MongoTeam {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const BACKEND = "http://localhost:8080";
+const BACKEND = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 const TEAM_CRESTS: Record<string, string> = {
   "Arsenal": "https://crests.football-data.org/57.png",
@@ -5683,7 +5683,7 @@ All 5 travel modes (Train, Flight, Metro, Road Trip, and Rideshare) have been up
   const fetchStoreProducts = async () => {
     setStoreLoading(true);
     try {
-      const res = await fetch("http://localhost:8000/api/store/products");
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/store/products`);
       if (res.ok) {
         const data = await res.json();
         setStoreProducts(data);
@@ -5699,7 +5699,7 @@ All 5 travel modes (Train, Flight, Metro, Road Trip, and Rideshare) have been up
     e.preventDefault();
     setListingSubmitting(true);
     try {
-      const res = await fetch("http://localhost:8000/api/store/products", {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/store/products`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -5725,7 +5725,7 @@ All 5 travel modes (Train, Flight, Metro, Road Trip, and Rideshare) have been up
 
   const handleBuyProduct = async (productId: string) => {
     try {
-      const res = await fetch(`http://localhost:8000/api/store/products/${productId}/buy`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/store/products/${productId}/buy`, {
         method: "POST"
       });
       if (res.ok) fetchStoreProducts();

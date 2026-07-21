@@ -142,7 +142,7 @@ export default function OnboardingPage() {
 
     async function fetchConfig() {
       try {
-        const res = await fetch("http://localhost:8080/api/v1/config");
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/v1/config`);
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data.supported_leagues) && data.supported_leagues.length > 0) {
@@ -171,7 +171,7 @@ export default function OnboardingPage() {
     async function loadTeams() {
       setLoadingTeams(true);
       try {
-        const res = await fetch(`http://localhost:8080/api/v1/competitions/${activeLeague}/teams`);
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/v1/competitions/${activeLeague}/teams`);
         if (!res.ok) throw new Error("Failed to load league teams");
         const data = await res.json();
         if (active && data && Array.isArray(data.teams)) {
@@ -258,7 +258,7 @@ export default function OnboardingPage() {
     setSubmitting(true);
 
     try {
-      const response = await fetch("http://localhost:8080/api/v1/auth/profile", {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/v1/auth/profile`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
