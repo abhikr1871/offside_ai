@@ -15,7 +15,7 @@ export default function Header() {
     setUser(getCurrentUser());
     async function fetchConfig() {
       try {
-        const res = await fetch("http://localhost:8080/api/v1/config");
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/v1/config`);
         if (res.ok) {
           const data = await res.json();
           if (data.app_mode) {

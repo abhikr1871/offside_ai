@@ -75,7 +75,7 @@ export default function FollowTeam({ onFollowChange, appMode = "club" }: FollowT
   useEffect(() => {
     async function fetchLeagues() {
       try {
-        const res = await fetch("http://localhost:8080/api/v1/config");
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/v1/config`);
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data.supported_leagues) && data.supported_leagues.length > 0) {
@@ -100,7 +100,7 @@ export default function FollowTeam({ onFollowChange, appMode = "club" }: FollowT
     async function loadTeams() {
       try {
         setLoadingTeams(true);
-        const res = await fetch(`http://localhost:8080/api/v1/competitions/${activeLeague}/teams`);
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/v1/competitions/${activeLeague}/teams`);
         if (!res.ok) {
           throw new Error("Failed to fetch teams");
         }
@@ -205,7 +205,7 @@ export default function FollowTeam({ onFollowChange, appMode = "club" }: FollowT
 
     try {
       setLoadingSquad(true);
-      const res = await fetch(`http://localhost:8080/api/v1/teams/${team.id}`);
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/v1/teams/${team.id}`);
       if (!res.ok) throw new Error("Failed to fetch squad");
       const data = await res.json();
       if (!data || !data.squad || data.squad.length === 0) {

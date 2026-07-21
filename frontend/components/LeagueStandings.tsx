@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { FlagIcon } from "./LiveScore";
 import "./LeagueStandings.css";
 
-const BACKEND_URL = "http://localhost:8080";
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 const STANDINGS_LEAGUES = [
   { value: "PL", label: "Premier League" },

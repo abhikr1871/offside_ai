@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 
-const BACKEND_URL = "http://localhost:8080";
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 const LIVE_LOADER_VIDEO_SRC = "/animations/live-fetch-loader.mp4";
 
 const DEFAULT_LEAGUES = [
