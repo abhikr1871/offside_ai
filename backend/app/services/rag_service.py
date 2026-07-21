@@ -9,7 +9,8 @@ try:
     from vertexai.generative_models import GenerativeModel
     from vertexai.language_models import TextEmbeddingModel
     HAS_VERTEX_AI = True
-except ImportError:
+except Exception as e:
+    logger.warning(f"Failed to import vertexai: {e}")
     HAS_VERTEX_AI = False
 
 # Try imports for Google Generative AI (AI Studio)
