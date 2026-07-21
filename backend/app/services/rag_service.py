@@ -17,7 +17,8 @@ except Exception as e:
 try:
     import google.generativeai as genai
     HAS_GENAI = True
-except ImportError:
+except Exception as e:
+    logger.warning(f"Failed to import google.generativeai: {e}")
     HAS_GENAI = False
 
 logger = logging.getLogger("offside_ai.rag_service")

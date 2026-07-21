@@ -83,14 +83,18 @@ try:
     import vertexai
     from vertexai.generative_models import GenerativeModel
     HAS_VERTEX_AI = True
-except ImportError:
+except Exception as e:
+    import logging
+    logging.getLogger(__name__).warning(f"Failed to import vertexai: {e}")
     HAS_VERTEX_AI = False
 
 # Try imports for Google Generative AI (AI Studio)
 try:
     import google.generativeai as genai
     HAS_GENAI = True
-except ImportError:
+except Exception as e:
+    import logging
+    logging.getLogger(__name__).warning(f"Failed to import google.generativeai: {e}")
     HAS_GENAI = False
 
 class AgentService:
