@@ -1295,47 +1295,42 @@ export default function DashboardPage() {
               <div className="loading-shimmer" style={{ height: 200, borderRadius: 16 }} />
             ) : userProfile ? (
               <div className="space-y-6">
-                {/* Followed Teams (2-Column Compact Grid with Vertical Card Layout) */}
+                {/* Followed Teams (List Layout) */}
                 <div>
-                  <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center justify-between mb-3">
                     <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Followed Clubs</span>
                     <span className="text-[9px] text-zinc-400 font-mono font-bold">{userProfile.followed_teams.length} Synced</span>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div className="flex flex-col gap-1">
                     {userProfile.followed_teams.map(team => (
-                      <div key={team} className="p-3 rounded-2xl bg-zinc-900/90 dark:bg-zinc-950/90 border border-zinc-800/80 flex flex-col items-center text-center justify-between gap-2 hover:border-emerald-500/50 transition-all group shadow-sm">
-                        {/* Top: Logo */}
-                        <div className="w-11 h-11 rounded-xl bg-zinc-800/50 dark:bg-zinc-900/50 border border-zinc-700/40 p-1.5 flex items-center justify-center shadow-inner">
-                          {getTeamCrest(team) ? (
-                            <img src={getTeamCrest(team)} alt={team} className="w-8 h-8 object-contain group-hover:scale-110 transition-transform drop-shadow" />
-                          ) : (
-                            <span className="font-black text-emerald-500 text-lg">{team.charAt(0)}</span>
-                          )}
+                      <div key={team} className="group flex items-center justify-between py-2.5 border-b border-zinc-200/50 dark:border-zinc-800/50 last:border-0 hover:bg-zinc-100 dark:hover:bg-zinc-800/40 rounded-xl px-3 -mx-3 transition-colors">
+                        <div className="flex items-center gap-3.5">
+                          <div className="w-10 h-10 flex items-center justify-center">
+                            {getTeamCrest(team) ? (
+                              <img src={getTeamCrest(team)} alt={team} className="w-9 h-9 object-contain drop-shadow-sm group-hover:scale-110 transition-transform" />
+                            ) : (
+                              <span className="font-black text-emerald-500 text-xl">{team.charAt(0)}</span>
+                            )}
+                          </div>
+                          <div className="flex flex-col">
+                            <h4 className="font-black text-sm text-zinc-900 dark:text-white leading-tight">{team}</h4>
+                            <span className="text-[10px] font-mono font-medium text-zinc-500 dark:text-zinc-400 mt-0.5">🌐 Official Partner</span>
+                          </div>
                         </div>
-
-                        {/* Middle: Info vertically under logo */}
-                        <div className="flex flex-col items-center w-full">
-                          <h4 className="font-black text-xs text-white leading-tight mb-0.5 truncate max-w-[130px]">{team}</h4>
-                          <span className="inline-flex items-center gap-1 text-[8px] font-mono px-1.5 py-0.5 rounded bg-zinc-800/80 text-zinc-300 border border-zinc-700/50 font-bold">
-                            🌐 Official Partner
-                          </span>
-                        </div>
-
-                        {/* Bottom: Action Buttons vertically under info */}
-                        <div className="flex items-center gap-1.5 w-full pt-2 border-t border-zinc-800/80 mt-0.5">
+                        <div className="flex items-center gap-2">
                           <button
                             type="button"
                             onClick={() => handleOpenTeamDetails(team)}
-                            className="flex-1 px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold text-[10px] transition-all shadow-sm flex items-center justify-center gap-1 cursor-pointer border border-zinc-700/60"
+                            className="px-3.5 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 font-bold text-xs transition-colors"
                           >
-                            <span>ℹ️ Details</span>
+                            Details
                           </button>
                           <button
                             type="button"
                             onClick={() => setActiveTab("store")}
-                            className="flex-1 px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[10px] transition-all shadow-sm flex items-center justify-center gap-1 cursor-pointer"
+                            className="px-3.5 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs transition-colors shadow-sm"
                           >
-                            <span>🛍️ Buy</span>
+                            Buy
                           </button>
                         </div>
                       </div>
@@ -1343,43 +1338,38 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                {/* Favourite Players (2-Column Compact Grid with Vertical Card Layout) */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
+                {/* Favourite Players (List Layout) */}
+                <div className="mt-4">
+                  <div className="flex items-center justify-between mb-3">
                     <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Favourite Athletes</span>
                     <span className="text-[9px] text-zinc-400 font-mono font-bold">Live Tracking</span>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div className="flex flex-col gap-1">
                     {userProfile.favorite_players.map(p => (
-                      <div key={p} className="p-3 rounded-2xl bg-zinc-900/90 dark:bg-zinc-950/90 border border-zinc-800/80 flex flex-col items-center text-center justify-between gap-2 hover:border-violet-500/50 transition-all group shadow-sm">
-                        {/* Top: ⭐ Icon */}
-                        <div className="w-11 h-11 bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 border border-violet-500/30 rounded-xl flex items-center justify-center font-black text-violet-400 text-lg shadow-inner group-hover:scale-105 transition-transform">
-                          ⭐
+                      <div key={p} className="group flex items-center justify-between py-2.5 border-b border-zinc-200/50 dark:border-zinc-800/50 last:border-0 hover:bg-zinc-100 dark:hover:bg-zinc-800/40 rounded-xl px-3 -mx-3 transition-colors">
+                        <div className="flex items-center gap-3.5">
+                          <div className="w-10 h-10 flex items-center justify-center text-violet-500 text-2xl group-hover:scale-110 transition-transform drop-shadow-sm">
+                            ⭐
+                          </div>
+                          <div className="flex flex-col">
+                            <h4 className="font-black text-sm text-zinc-900 dark:text-white leading-tight">{p}</h4>
+                            <span className="text-[10px] font-mono font-medium text-zinc-500 dark:text-zinc-400 mt-0.5">🔥 Star Athlete</span>
+                          </div>
                         </div>
-
-                        {/* Middle: Info vertically under icon */}
-                        <div className="flex flex-col items-center w-full">
-                          <h4 className="font-black text-xs text-white leading-tight mb-0.5 truncate max-w-[130px]">{p}</h4>
-                          <span className="inline-flex items-center gap-1 text-[8px] font-mono px-1.5 py-0.5 rounded bg-violet-950/60 text-violet-300 border border-violet-800/60 font-bold">
-                            🔥 Star Athlete
-                          </span>
-                        </div>
-
-                        {/* Bottom: Action Buttons vertically under info */}
-                        <div className="flex items-center gap-1.5 w-full pt-2 border-t border-zinc-800/80 mt-0.5">
+                        <div className="flex items-center gap-2">
                           <button
                             type="button"
                             onClick={() => handleOpenPlayerDetails(p)}
-                            className="flex-1 px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold text-[10px] transition-all shadow-sm flex items-center justify-center gap-1 cursor-pointer border border-zinc-700/60"
+                            className="px-3.5 py-1.5 rounded-lg bg-violet-500/10 hover:bg-violet-500/20 text-violet-700 dark:text-violet-400 font-bold text-xs transition-colors"
                           >
-                            <span>ℹ️ Details</span>
+                            Details
                           </button>
                           <button
                             type="button"
                             onClick={() => setActiveTab("store")}
-                            className="flex-1 px-2 py-1 rounded-lg bg-violet-600 hover:bg-violet-500 text-white font-black text-[10px] transition-all shadow-sm flex items-center justify-center gap-1 cursor-pointer"
+                            className="px-3.5 py-1.5 rounded-lg bg-violet-500 hover:bg-violet-600 text-white font-bold text-xs transition-colors shadow-sm"
                           >
-                            <span>🛍️ Buy</span>
+                            Buy
                           </button>
                         </div>
                       </div>
