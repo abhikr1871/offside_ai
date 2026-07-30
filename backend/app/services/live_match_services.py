@@ -141,10 +141,8 @@ class LiveMatchService:
                         logger.info("Serving expired cache for league %s as fallback.", code)
                         cached_data = fallback_doc["data"]
                     else:
-                        raise HTTPException(
-                            status_code=502,
-                            detail=f"Unable to retrieve live match data for league {code}."
-                        )
+                        logger.warning("No fallback cache available for league %s. Returning empty match list.", code)
+                        cached_data = {"matches": []}
 
         # 3. Normalize matches to standard schema
         matches_list = cached_data.get("matches", [])

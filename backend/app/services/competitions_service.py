@@ -197,18 +197,27 @@ class CompetitionsService:
                             },
                             upsert=True
                         )
-                except httpx.HTTPError as exc:
-                    raise HTTPException(
-                        status_code=502,
-                        detail=f"Failed to connect to football-data.org: {exc}"
-                    )
                 except Exception as exc:
-                    if isinstance(exc, HTTPException):
-                        raise exc
-                    raise HTTPException(
-                        status_code=500,
-                        detail=f"Internal service error fetching competition teams: {exc}"
-                    )
+                    logger.warning("Failed to fetch teams. Generating mock teams: %s", exc)
+                    
+                    # Fallback to a mock directory of teams if API fails
+                    mock_teams = []
+                    for tid in [2061, 2065, 57, 61, 64, 65, 66, 73, 58, 67, 86, 81, 78, 95, 524]:
+                        t_data = await self.get_fallback_team_squad(tid)
+                        mock_teams.append({
+                            "id": t_data["id"],
+                            "name": t_data["name"],
+                            "shortName": t_data["shortName"],
+                            "tla": t_data["tla"],
+                            "crest": t_data["crest"],
+                            "venue": t_data["venue"]
+                        })
+                    cached_data = {
+                        "count": len(mock_teams),
+                        "competition": {"id": 2000, "name": "Mock League", "code": code_upper},
+                        "season": {"id": 1, "startDate": "2025-08-15", "endDate": "2026-05-25"},
+                        "teams": mock_teams
+                    }
 
         return cached_data
 
@@ -509,10 +518,8 @@ class CompetitionsService:
                         logger.info("Serving expired standings cache for league %s.", code_upper)
                         cached_data = fallback_doc["data"]
                     else:
-                        raise HTTPException(
-                            status_code=502,
-                            detail=f"Unable to retrieve standings for league {code_upper}."
-                        )
+                        logger.info("Generating mock standings for league %s.", code_upper)
+                        cached_data = self.generate_mock_standings(code_upper)
 
         return cached_data
 
