@@ -171,7 +171,11 @@ const TEAM_CRESTS: Record<string, string> = {
   "Germany": "https://crests.football-data.org/759.svg",
   "Argentina": "https://crests.football-data.org/762.svg",
   "Brazil": "https://crests.football-data.org/764.svg",
-  "Portugal": "https://crests.football-data.org/765.svg"
+  "Portugal": "https://crests.football-data.org/765.svg",
+  "Elche": "https://crests.football-data.org/285.png",
+  "Cagliari": "https://crests.football-data.org/104.png",
+  "Hoffenheim": "https://crests.football-data.org/720.png",
+  "TSG 1899 Hoffenheim": "https://crests.football-data.org/720.png"
 };
 
 const getTeamCrest = (name: string): string | undefined => {
