@@ -203,6 +203,18 @@ REAL_FRIENDLIES_2026: Dict[int, List[Dict[str, Any]]] = {
             "goals": [], "bookings": [], "sourceName": "Web Search"
         }
     ],
+    # Manchester United (66)
+    66: [
+        {
+            "id": "friendly_66_1",
+            "homeTeam": "Manchester United", "awayTeam": "PSG", "homeTeamId": 66, "awayTeamId": 524,
+            "homeCrest": "https://crests.football-data.org/66.png", "awayCrest": "https://crests.football-data.org/524.png",
+            "homeScore": 0, "awayScore": 0, "minute": "", "isLive": False, "status": "SCHEDULED",
+            "venue": "Ullevi Stadium", "city": "Gothenburg", "country": "Sweden",
+            "eventDate": "2026-08-08T17:00:00Z", "league": "Club Friendly", "league_code": "FRIENDLY",
+            "goals": [], "bookings": [], "sourceName": "Web Search"
+        }
+    ],
     # Chelsea (61)
     61: [
         {
