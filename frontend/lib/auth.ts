@@ -4,10 +4,9 @@ export interface StoredUser {
   email: string;
   password?: string;
 }
-
 const USERS_KEY = "offside_users";
 const CURRENT_USER_KEY = "offside_current_user_email";
-export const BACKEND_URL = "http://localhost:8080";
+export const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 export function getStoredUsers(): StoredUser[] {
   if (typeof window === "undefined") return [];
